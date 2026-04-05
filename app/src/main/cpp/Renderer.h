@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 #include <chrono>
+#include <cstdint>
+#include <atomic>
 
 #include "Model.h"
 #include "Shader.h"
@@ -14,33 +16,20 @@ struct android_app;
 
 class Renderer {
 public:
-    inline Renderer(android_app *pApp) :
-            app_(pApp),
-            display_(EGL_NO_DISPLAY),
-            surface_(EGL_NO_SURFACE),
-            context_(EGL_NO_CONTEXT),
-            width_(0),
-            height_(0),
-            shaderNeedsNewProjectionMatrix_(true),
-            game_(120.0f, 80.0f),
-            joystickTiltX_(0),
-            joystickTiltY_(0),
-            joystickPointerId_(-1),
-            boostPointerId_(-1),
-            joyPixelX_(0), joyPixelY_(0) {
-        initRenderer();
-        lastFrameTime_ = std::chrono::steady_clock::now();
-    }
-
+    Renderer(android_app *pApp);
     virtual ~Renderer();
+
     void handleInput();
     void render();
+    void requestRestart() { pendingRestart_.store(true); }
+    void restartGame();
 
 private:
     void initRenderer();
     void updateRenderArea();
     void createModels();
     void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false);
+    void triggerGameOver();
 
     android_app *app_;
     EGLDisplay display_;
@@ -59,6 +48,10 @@ private:
     float joystickTiltX_, joystickTiltY_;
     int32_t joystickPointerId_, boostPointerId_;
     float joyPixelX_, joyPixelY_; 
+    bool wasGameOver_;
+    std::atomic<bool> pendingRestart_; 
 };
+
+extern Renderer* gRenderer;
 
 #endif //ANDROIDGLINVESTIGATIONS_RENDERER_H

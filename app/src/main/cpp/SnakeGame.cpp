@@ -32,7 +32,8 @@ void SnakeGame::reset() {
     segmentDistance_ = 0.5f;
     
     foods_.clear();
-    for (int i = 0; i < 5; ++i) spawnFood();
+    // 初始食物数量从 5 增加到 35 (5倍)
+    for (int i = 0; i < 35; ++i) spawnFood();
 }
 
 void SnakeGame::spawnFood() {
@@ -65,13 +66,15 @@ void SnakeGame::update(float deltaTime) {
             it = foods_.erase(it);
             // Add a segment (just grow by duplicate for now, it'll smooth out)
             snake_.push_back(snake_.back());
-            if (foods_.size() < 3) spawnFood();
+            // 补给阈值从 3 增加到 35 (5倍)
+            if (foods_.size() < 25) spawnFood();
         } else {
             ++it;
         }
     }
     
-    if (foods_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
+    // 维持食物总量从 5 增加到 25 (5倍)，并略微提高被动生成概率以应对大量食物消耗
+    if (foods_.size() < 35 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.05f) {
         spawnFood();
     }
 }
