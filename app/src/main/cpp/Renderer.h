@@ -27,6 +27,7 @@ class Renderer {
 public:
     Renderer(android_app *pApp);
     virtual ~Renderer();
+
     void requestExitDialog() { pendingExitDialog_.store(true); }
     void handleInput();
     void render();
@@ -34,6 +35,7 @@ public:
     void requestGoToMainMenu() { pendingMainMenu_.store(true); }
     void restartGame();
     void goToMainMenu();
+    GameState getGameState() { return game_.getState(); }
 
 private:
     void initRenderer();
@@ -42,10 +44,13 @@ private:
     void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0);
     void drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& text = "");
     void triggerGameOver();
-    void triggerExitDialog(); // 在渲染循环中调用 JNI
 
-    std::atomic<bool> pendingExitDialog_{false}; // 标志位
-    
+    void triggerExitDialog();
+    void triggerReturnMenuDialog(); // 新增：调用 JNI 弹出返回主菜单对话框
+
+    std::atomic<bool> pendingExitDialog_{false};
+    std::atomic<bool> pendingReturnMenuDialog_{false}; // 新增：标志位
+
     void loadTextTextures();
     TextTexture createTextTexture(const std::string& text, int fontSize);
     GLuint loadBackgroundTexture(const std::string& fileName);
@@ -66,7 +71,7 @@ private:
 
     float joystickTiltX_, joystickTiltY_;
     int32_t joystickPointerId_, boostPointerId_;
-    float joyPixelX_, joyPixelY_; 
+    float joyPixelX_, joyPixelY_;
     bool wasGameOver_;
     std::atomic<bool> pendingRestart_;
     std::atomic<bool> pendingMainMenu_;
@@ -74,6 +79,7 @@ private:
     std::map<std::string, TextTexture> textTextures_;
     GLuint startBackgroundTextureId_;
     GLuint gameBackgroundTextureId_;
+    GLuint playingBackgroundTextureId_; // 新增：游戏进行时的背景纹理 ID
 
     static constexpr float kProjectionHalfHeight = 22.f;
 };

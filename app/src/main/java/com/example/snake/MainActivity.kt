@@ -2,15 +2,16 @@ package com.example.snake
 
 import android.app.AlertDialog
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Bundle
 import android.view.View
+import androidx.activity.OnBackPressedCallback
 import androidx.annotation.Keep
 import com.google.androidgamesdk.GameActivity
-import android.graphics.BitmapFactory
 
 class MainActivity : GameActivity() {
     companion object {
@@ -19,8 +20,23 @@ class MainActivity : GameActivity() {
         }
     }
 
+    private external fun nativeIsAtMainMenu(): Boolean
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 核心：处理返回键事件
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (nativeIsAtMainMenu()) {
+                    // 如果在主菜单或模式选择界面，弹出退出游戏确认框
+                    showExitDialog()
+                } else {
+                    // 如果在游戏中，弹出返回主菜单确认框
+                    showReturnToMenuDialog()
+                }
+            }
+        })
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -47,14 +63,28 @@ class MainActivity : GameActivity() {
                 .setTitle("退出游戏")
                 .setMessage("确定要离开蛇蛇大作战吗？")
                 .setPositiveButton("确认退出") { _, _ ->
-                    finish() // 真正关闭 Activity
+                    finish()
                 }
                 .setNegativeButton("再玩一会", null)
                 .show()
         }
     }
 
-
+    // --- 新增：游戏中按下返回键的弹窗 ---
+    @Keep
+    fun showReturnToMenuDialog() {
+        runOnUiThread {
+            AlertDialog.Builder(this)
+                .setTitle("是否要返回主菜单？")
+                .setMessage("当前游戏进度将会丢失。")
+                .setCancelable(false)
+                .setPositiveButton("返回主菜单") { _, _ ->
+                    nativeGoToMainMenu() // 调用 C++ 接口返回主菜单
+                }
+                .setNegativeButton("继续游戏", null) // 点击继续游戏则关闭弹窗，不做任何事
+                .show()
+        }
+    }
 
     @Keep
     fun showGameOverDialog(score: Int) {
