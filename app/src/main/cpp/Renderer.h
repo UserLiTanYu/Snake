@@ -2,11 +2,14 @@
 #define ANDROIDGLINVESTIGATIONS_RENDERER_H
 
 #include <EGL/egl.h>
+#include <GLES3/gl3.h>
 #include <memory>
 #include <vector>
 #include <chrono>
 #include <cstdint>
 #include <atomic>
+#include <string>
+#include <map>
 
 #include "Model.h"
 #include "Shader.h"
@@ -14,22 +17,38 @@
 
 struct android_app;
 
+struct TextTexture {
+    GLuint id = 0;
+    float width = 0;
+    float height = 0;
+};
+
 class Renderer {
 public:
     Renderer(android_app *pApp);
     virtual ~Renderer();
-
+    void requestExitDialog() { pendingExitDialog_.store(true); }
     void handleInput();
     void render();
     void requestRestart() { pendingRestart_.store(true); }
+    void requestGoToMainMenu() { pendingMainMenu_.store(true); }
     void restartGame();
+    void goToMainMenu();
 
 private:
     void initRenderer();
     void updateRenderArea();
     void createModels();
-    void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false);
+    void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0);
+    void drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& text = "");
     void triggerGameOver();
+    void triggerExitDialog(); // 在渲染循环中调用 JNI
+
+    std::atomic<bool> pendingExitDialog_{false}; // 标志位
+    
+    void loadTextTextures();
+    TextTexture createTextTexture(const std::string& text, int fontSize);
+    GLuint loadBackgroundTexture(const std::string& fileName);
 
     android_app *app_;
     EGLDisplay display_;
@@ -49,7 +68,14 @@ private:
     int32_t joystickPointerId_, boostPointerId_;
     float joyPixelX_, joyPixelY_; 
     bool wasGameOver_;
-    std::atomic<bool> pendingRestart_; 
+    std::atomic<bool> pendingRestart_;
+    std::atomic<bool> pendingMainMenu_;
+
+    std::map<std::string, TextTexture> textTextures_;
+    GLuint startBackgroundTextureId_;
+    GLuint gameBackgroundTextureId_;
+
+    static constexpr float kProjectionHalfHeight = 22.f;
 };
 
 extern Renderer* gRenderer;

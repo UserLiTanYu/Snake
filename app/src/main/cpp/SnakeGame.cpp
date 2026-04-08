@@ -26,14 +26,13 @@ void SnakeGame::reset() {
     rotation_ = M_PI / 2.0f; // Initial direction: UP
     isBoosting_ = false;
     score_ = 0;
-    state_ = GameState::MENU;
+    state_ = GameState::START_SCREEN;
     baseSpeed_ = 5.0f;
     boostMultiplier_ = 2.0f;
     segmentDistance_ = 0.5f;
     
     foods_.clear();
-    // 初始食物数量从 5 增加到 35 (5倍)
-    for (int i = 0; i < 35; ++i) spawnFood();
+    for (int i = 0; i < 25; ++i) spawnFood();
 }
 
 void SnakeGame::spawnFood() {
@@ -64,17 +63,14 @@ void SnakeGame::update(float deltaTime) {
         if (std::sqrt(dx*dx + dy*dy) < 1.0f) {
             score_++;
             it = foods_.erase(it);
-            // Add a segment (just grow by duplicate for now, it'll smooth out)
             snake_.push_back(snake_.back());
-            // 补给阈值从 3 增加到 35 (5倍)
-            if (foods_.size() < 25) spawnFood();
+            if (foods_.size() < 15) spawnFood();
         } else {
             ++it;
         }
     }
     
-    // 维持食物总量从 5 增加到 25 (5倍)，并略微提高被动生成概率以应对大量食物消耗
-    if (foods_.size() < 35 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.05f) {
+    if (foods_.size() < 25 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.05f) {
         spawnFood();
     }
 }
@@ -93,8 +89,6 @@ void SnakeGame::move(float deltaTime) {
         return;
     }
 
-    // Smooth body trailing logic
-    // We update segments to follow the one in front at a fixed distance
     snake_[0] = nextHead;
     for (size_t i = 1; i < snake_.size(); ++i) {
         Vector2f& current = snake_[i];
@@ -109,7 +103,6 @@ void SnakeGame::move(float deltaTime) {
         }
     }
     
-    // Self-collision (skip head and nearby segments)
     for (size_t i = 10; i < snake_.size(); ++i) {
         float dx = nextHead.x - snake_[i].x;
         float dy = nextHead.y - snake_[i].y;

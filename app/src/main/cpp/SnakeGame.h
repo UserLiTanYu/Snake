@@ -7,7 +7,10 @@
 #include <cmath>
 
 enum class GameState {
-    MENU, PLAYING, GAME_OVER
+    START_SCREEN,
+    MODE_SELECTION,
+    PLAYING,
+    GAME_OVER
 };
 
 struct Vector2f {
@@ -33,6 +36,7 @@ public:
     const std::vector<Vector2f>& getFoods() const { return foods_; }
     int getScore() const { return score_; }
     GameState getState() const { return state_; }
+    void setState(GameState s) { state_ = s; }
     void startGame() { state_ = GameState::PLAYING; }
 
     float getWorldWidth() const { return worldWidth_; }
