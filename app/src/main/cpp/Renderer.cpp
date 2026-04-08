@@ -75,6 +75,7 @@ void main() {
     if (uUseTexture) {
         vec2 correctedUV = vec2(fragUV.x, 1.0 - fragUV.y);
         vec4 texColor = texture(uTexture, correctedUV);
+        texColor = texColor.bgra;
         if (uColor.r > 0.99 && uColor.g > 0.99 && uColor.b > 0.99 && uColor.a > 0.99) {
             outColor = texColor;
         } else {
@@ -95,7 +96,7 @@ void main() {
     } else if (uIsLightning) {
         vec2 q = p * 2.0;
         float y = q.y;
-        float x = -q.x; // 反轉閃電符號
+        float x = -q.x;
         float top = max(abs(x - 0.15 + y*0.3) - 0.2, abs(y - 0.3) - 0.4);
         float bot = max(abs(x + 0.15 + y*0.3) - 0.2, abs(y + 0.3) - 0.4);
         alpha = smoothstep(0.0, -0.03, min(top, bot));
@@ -116,13 +117,20 @@ Renderer::Renderer(android_app *pApp) :
         width_(0), height_(0), shaderNeedsNewProjectionMatrix_(true), game_(120.0f, 80.0f),
         joystickTiltX_(0), joystickTiltY_(0), joystickPointerId_(-1), boostPointerId_(-1),
         joyPixelX_(0), joyPixelY_(0), wasGameOver_(false), pendingRestart_(false), pendingMainMenu_(false),
-        startBackgroundTextureId_(0), gameBackgroundTextureId_(0), playingBackgroundTextureId_(0) {
+        startBackgroundTextureId_(0), gameBackgroundTextureId_(0), playingBackgroundTextureId_(0),
+        speedTextureId_(0), shieldTextureId_(0), magnetTextureId_(0) {
     gRenderer = this;
     initRenderer();
     loadTextTextures();
     startBackgroundTextureId_ = loadBackgroundTexture("images/background.png");
     gameBackgroundTextureId_ = loadBackgroundTexture("images/main.png");
     playingBackgroundTextureId_ = loadBackgroundTexture("images/background_game.png");
+
+    // --- 载入道具图片资源 ---
+    speedTextureId_ = loadBackgroundTexture("images/speed.png");
+    shieldTextureId_ = loadBackgroundTexture("images/shield.png");
+    magnetTextureId_ = loadBackgroundTexture("images/magnet.png");
+
     lastFrameTime_ = std::chrono::steady_clock::now();
 }
 
@@ -131,6 +139,9 @@ Renderer::~Renderer() {
     if (startBackgroundTextureId_) glDeleteTextures(1, &startBackgroundTextureId_);
     if (gameBackgroundTextureId_) glDeleteTextures(1, &gameBackgroundTextureId_);
     if (playingBackgroundTextureId_) glDeleteTextures(1, &playingBackgroundTextureId_);
+    if (speedTextureId_) glDeleteTextures(1, &speedTextureId_);
+    if (shieldTextureId_) glDeleteTextures(1, &shieldTextureId_);
+    if (magnetTextureId_) glDeleteTextures(1, &magnetTextureId_);
     for (auto& pair : textTextures_) glDeleteTextures(1, &pair.second.id);
 }
 
@@ -417,19 +428,34 @@ void Renderer::render() {
         drawShape(-0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f);
         drawShape(w + 0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f);
 
-        // --- 核心修改：渲染不同颜色的食物 ---
+        // --- 核心：渲染药水道具 ---
+        for (const auto& pu : game_.getPowerUps()) {
+            GLuint tex = 0;
+            if (pu.type == PowerUpType::SPEED) tex = speedTextureId_;
+            else if (pu.type == PowerUpType::SHIELD) tex = shieldTextureId_;
+            else if (pu.type == PowerUpType::MAGNET) tex = magnetTextureId_;
+
+            if (tex) {
+                // 道具绘制得比普通食物稍微大一点，并给予白色底光衬托
+                drawShape(pu.pos.x - camX, pu.pos.y - camY, 2.0f, 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex);
+            } else {
+                drawShape(pu.pos.x - camX, pu.pos.y - camY, 1.8f, 1.8f, 1.0f, 0.5f, 0.0f, 1.0f, true);
+            }
+        }
+
+        // --- 渲染食物 ---
         for (const auto& food : game_.getFoods()) {
             if (food.isDropped) {
                 drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, 0.0f, 1.0f, 1.0f, 1.0f, true);
             } else {
                 float fr = 1.0f, fg = 1.0f, fb = 1.0f;
                 switch(food.colorType) {
-                    case 0: fr = 0.2f; fg = 0.5f; fb = 1.0f; break; // 蓝色
-                    case 1: fr = 1.0f; fg = 0.4f; fb = 0.8f; break; // 粉色
-                    case 2: fr = 1.0f; fg = 0.2f; fb = 0.2f; break; // 红色
-                    case 3: fr = 0.2f; fg = 1.0f; fb = 0.2f; break; // 绿色
-                    case 4: fr = 0.7f; fg = 0.2f; fb = 1.0f; break; // 紫色
-                    case 5: fr = 1.0f; fg = 0.9f; fb = 0.2f; break; // 黄色
+                    case 0: fr = 0.2f; fg = 0.5f; fb = 1.0f; break;
+                    case 1: fr = 1.0f; fg = 0.4f; fb = 0.8f; break;
+                    case 2: fr = 1.0f; fg = 0.2f; fb = 0.2f; break;
+                    case 3: fr = 0.2f; fg = 1.0f; fb = 0.2f; break;
+                    case 4: fr = 0.7f; fg = 0.2f; fb = 1.0f; break;
+                    case 5: fr = 1.0f; fg = 0.9f; fb = 0.2f; break;
                 }
                 drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, fr, fg, fb, 1.0f, true);
             }
@@ -437,10 +463,16 @@ void Renderer::render() {
 
         float scaleFactor = 1.0f + std::min(game_.getScore() * 0.02f, 2.0f);
 
+        // --- 核心：渲染蛇身与护盾光圈 ---
         for (size_t i = 0; i < snake.size(); ++i) {
             float intensity = 1.0f - (static_cast<float>(i) / snake.size() * 0.5f);
             float curSize = (i==0?1.5f:1.1f) * scaleFactor;
             drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, 0.0f, 1.0f*intensity, 1.0f*intensity, 1.0f, true);
+
+            // 如果蛇头并且拥有护盾，在周围画一个透亮的青色保护圈
+            if (i == 0 && game_.hasShield()) {
+                drawShape(snake[i].x - camX, snake[i].y - camY, curSize + 1.2f, curSize + 1.2f, 0.2f, 0.9f, 1.0f, 0.5f, true);
+            }
         }
 
         if (currentState == GameState::PLAYING) {

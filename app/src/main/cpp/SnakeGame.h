@@ -27,7 +27,19 @@ struct Vector2f {
 struct Food {
     Vector2f pos;
     bool isDropped;
-    int colorType; // --- 新增：用于记录食物的随机颜色 ---
+    int colorType;
+};
+
+// --- 新增：定义道具类型和结构 ---
+enum class PowerUpType {
+    SPEED,
+    SHIELD,
+    MAGNET
+};
+
+struct PowerUp {
+    Vector2f pos;
+    PowerUpType type;
 };
 
 class SnakeGame {
@@ -41,16 +53,19 @@ public:
 
     const std::vector<Vector2f>& getSnake() const { return snake_; }
     const std::vector<Food>& getFoods() const { return foods_; }
+    const std::vector<PowerUp>& getPowerUps() const { return powerUps_; } // 获取道具列表
     int getScore() const { return score_; }
     GameState getState() const { return state_; }
     void setState(GameState s) { state_ = s; }
     void startGame() { state_ = GameState::PLAYING; }
+    bool hasShield() const { return shieldTimer_ > 0.0f; } // 提供给渲染器判断是否绘制护盾光圈
 
     float getWorldWidth() const { return worldWidth_; }
     float getWorldHeight() const { return worldHeight_; }
 
 private:
     void spawnFood();
+    void spawnPowerUp(); // 生成道具
     void move(float deltaTime);
     bool checkCollisionWithSelf() const;
 
@@ -63,6 +78,8 @@ private:
     bool isBoosting_;
 
     std::vector<Food> foods_;
+    std::vector<PowerUp> powerUps_; // 道具列表
+
     int score_;
     GameState state_;
 
@@ -72,6 +89,11 @@ private:
 
     float pendingGrowth_;
     float pendingFoodLoss_;
+
+    // --- 新增：道具状态计时器 ---
+    float speedTimer_;
+    float shieldTimer_;
+    float magnetTimer_;
 
     std::mt19937 rng_;
 };

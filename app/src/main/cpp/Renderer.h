@@ -93,6 +93,11 @@ private:
     GLuint gameBackgroundTextureId_;
     GLuint playingBackgroundTextureId_;
 
+    // --- 新增：道具贴图句柄 ---
+    GLuint speedTextureId_;
+    GLuint shieldTextureId_;
+    GLuint magnetTextureId_;
+
     static constexpr float kProjectionHalfHeight = 22.f;
 };
 
