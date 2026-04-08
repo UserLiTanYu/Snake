@@ -65,6 +65,7 @@ in vec2 fragUV;
 uniform vec4 uColor;
 uniform bool uIsCircle;
 uniform bool uIsGear;
+uniform bool uIsLightning;
 uniform float uRadius;
 uniform bool uUseTexture;
 uniform sampler2D uTexture;
@@ -91,6 +92,13 @@ void main() {
         float gearRadius = 0.38 + 0.07 * smoothstep(-0.2, 0.2, cos(a * 8.0));
         float hole = smoothstep(0.12, 0.15, r);
         alpha = smoothstep(gearRadius + 0.01, gearRadius - 0.01, r) * hole;
+    } else if (uIsLightning) {
+        vec2 q = p * 2.0;
+        float y = q.y;
+        float x = -q.x; // 反轉閃電符號
+        float top = max(abs(x - 0.15 + y*0.3) - 0.2, abs(y - 0.3) - 0.4);
+        float bot = max(abs(x + 0.15 + y*0.3) - 0.2, abs(y + 0.3) - 0.4);
+        alpha = smoothstep(0.0, -0.03, min(top, bot));
     } else if (uIsCircle) {
         alpha = smoothstep(0.5, 0.47, length(p));
     } else {
@@ -202,7 +210,6 @@ void Renderer::loadTextTextures() {
     textTextures_["challenge"] = createTextTexture("挑战模式", 40);
     textTextures_["more"] = createTextTexture("更多玩法", 40);
 
-    // 设置面板文字
     textTextures_["music_on"] = createTextTexture("音乐: 开", 40);
     textTextures_["music_off"] = createTextTexture("音乐: 关", 40);
     textTextures_["sfx_on"] = createTextTexture("音效: 开", 40);
@@ -221,13 +228,12 @@ void Renderer::drawButton(float x, float y, float w, float h, float r, float g, 
 
     drawShape(x, y, w + 0.6f, h + 0.6f, r, g, b, 0.1f, false, cornerRadius + 0.05f);
     drawShape(x, y, w, h, r, g, b, alpha, false, cornerRadius);
-    drawShape(x, y, w, h, 1.0f, 1.0f, 1.0f, alpha * 0.3f, false, cornerRadius); // 微光高光
+    drawShape(x, y, w, h, 1.0f, 1.0f, 1.0f, alpha * 0.3f, false, cornerRadius);
 
     if (textTextures_.count(label)) {
         auto& tex = textTextures_[label];
         float tw = tex.width;
         float th = tex.height;
-        // 防止文字太贴近圆弧边缘
         float maxW = w * 0.75f;
         float maxH = h * 0.6f;
         if (tw > maxW || th > maxH) {
@@ -403,24 +409,38 @@ void Renderer::render() {
 
         float w = game_.getWorldWidth(), h = game_.getWorldHeight();
         if (playingBackgroundTextureId_) {
-            // 背景稍微放大，填满边框内部
             drawShape(w/2.0f - camX, h/2.0f - camY, w + 0.8f, h + 0.8f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, playingBackgroundTextureId_);
         }
 
-        // --- 核心修改 2：向外移动红框 ---
-        // 将红线的中心分别向外移动 0.2f，配合 0.4f 的线宽，此时红线的内边缘正好落在坐标 0 和 w/h 上。
-        // 这既完美吻合了游戏的死亡判定逻辑，又在视觉上形成了一个刚好包住背景的画框。
-        drawShape(w/2.0f - camX, -0.2f - camY, w + 0.8f, 0.4f, 1.0f, 0.1f, 0.1f, 1.0f); // 底部
-        drawShape(w/2.0f - camX, h + 0.2f - camY, w + 0.8f, 0.4f, 1.0f, 0.1f, 0.1f, 1.0f); // 顶部
-        drawShape(-0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f); // 左侧
-        drawShape(w + 0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f); // 右侧
+        drawShape(w/2.0f - camX, -0.2f - camY, w + 0.8f, 0.4f, 1.0f, 0.1f, 0.1f, 1.0f);
+        drawShape(w/2.0f - camX, h + 0.2f - camY, w + 0.8f, 0.4f, 1.0f, 0.1f, 0.1f, 1.0f);
+        drawShape(-0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f);
+        drawShape(w + 0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f);
 
-        for (const auto& food : game_.getFoods())
-            drawShape(food.x - camX, food.y - camY, 0.8f, 0.8f, 1.0f, 0.9f, 0.2f, 1.0f, true);
+        // --- 核心修改：渲染不同颜色的食物 ---
+        for (const auto& food : game_.getFoods()) {
+            if (food.isDropped) {
+                drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, 0.0f, 1.0f, 1.0f, 1.0f, true);
+            } else {
+                float fr = 1.0f, fg = 1.0f, fb = 1.0f;
+                switch(food.colorType) {
+                    case 0: fr = 0.2f; fg = 0.5f; fb = 1.0f; break; // 蓝色
+                    case 1: fr = 1.0f; fg = 0.4f; fb = 0.8f; break; // 粉色
+                    case 2: fr = 1.0f; fg = 0.2f; fb = 0.2f; break; // 红色
+                    case 3: fr = 0.2f; fg = 1.0f; fb = 0.2f; break; // 绿色
+                    case 4: fr = 0.7f; fg = 0.2f; fb = 1.0f; break; // 紫色
+                    case 5: fr = 1.0f; fg = 0.9f; fb = 0.2f; break; // 黄色
+                }
+                drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, fr, fg, fb, 1.0f, true);
+            }
+        }
+
+        float scaleFactor = 1.0f + std::min(game_.getScore() * 0.02f, 2.0f);
 
         for (size_t i = 0; i < snake.size(); ++i) {
             float intensity = 1.0f - (static_cast<float>(i) / snake.size() * 0.5f);
-            drawShape(snake[i].x - camX, snake[i].y - camY, (i==0?1.5f:1.1f), (i==0?1.5f:1.1f), 0.0f, 1.0f*intensity, 1.0f*intensity, 1.0f, true);
+            float curSize = (i==0?1.5f:1.1f) * scaleFactor;
+            drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, 0.0f, 1.0f*intensity, 1.0f*intensity, 1.0f, true);
         }
 
         if (currentState == GameState::PLAYING) {
@@ -431,7 +451,10 @@ void Renderer::render() {
             drawShape(joyX + joystickTiltX_*5.0f, joyY + joystickTiltY_*5.0f, 6.0f, 6.0f, 1.0f, 1.0f, 1.0f, 0.5f, true);
 
             float bX = worldHalfWidth - 16.0f, bY = -kProjectionHalfHeight + 14.0f;
-            drawShape(bX, bY, 10.5f, 10.5f, 1.0f, 0.4f, 0.0f, (boostPointerId_ != -1 ? 0.9f : 0.4f), true);
+            float boostAlpha = (boostPointerId_ != -1) ? 0.7f : 0.3f;
+
+            drawShape(bX, bY, 11.0f, 11.0f, 1.0f, 1.0f, 1.0f, boostAlpha, true);
+            drawShape(bX, bY, 6.0f, 6.0f, 1.0f, 0.8f, 0.0f, 1.0f, false, 0.0f, 0, false, true);
         }
     }
 
@@ -477,13 +500,14 @@ void Renderer::render() {
     eglSwapBuffers(display_, surface_);
 }
 
-void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a, bool isCircle, float radius, GLuint textureId, bool isGear) {
+void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a, bool isCircle, float radius, GLuint textureId, bool isGear, bool isLightning) {
     if (!shader_ || models_.empty()) return;
     glUniform3f(glGetUniformLocation(shader_->getProgram(), "uOffset"), x, y, 0.0f);
     glUniform2f(glGetUniformLocation(shader_->getProgram(), "uScale"), sx, sy);
     glUniform4f(glGetUniformLocation(shader_->getProgram(), "uColor"), r, g, b, a);
     glUniform1i(glGetUniformLocation(shader_->getProgram(), "uIsCircle"), isCircle ? 1 : 0);
     glUniform1i(glGetUniformLocation(shader_->getProgram(), "uIsGear"), isGear ? 1 : 0);
+    glUniform1i(glGetUniformLocation(shader_->getProgram(), "uIsLightning"), isLightning ? 1 : 0);
     glUniform1f(glGetUniformLocation(shader_->getProgram(), "uRadius"), radius);
     glUniform1i(glGetUniformLocation(shader_->getProgram(), "uUseTexture"), textureId > 0 ? 1 : 0);
 

@@ -6,12 +6,11 @@
 #include <chrono>
 #include <cmath>
 
-// --- 修改：新增 PAUSED 状态 ---
 enum class GameState {
     START_SCREEN,
     MODE_SELECTION,
     PLAYING,
-    PAUSED, // <- 新增的暂停状态
+    PAUSED,
     GAME_OVER
 };
 
@@ -25,6 +24,12 @@ struct Vector2f {
     float length() const { return std::sqrt(x * x + y * y); }
 };
 
+struct Food {
+    Vector2f pos;
+    bool isDropped;
+    int colorType; // --- 新增：用于记录食物的随机颜色 ---
+};
+
 class SnakeGame {
 public:
     SnakeGame(float worldWidth, float worldHeight);
@@ -35,7 +40,7 @@ public:
     void reset();
 
     const std::vector<Vector2f>& getSnake() const { return snake_; }
-    const std::vector<Vector2f>& getFoods() const { return foods_; }
+    const std::vector<Food>& getFoods() const { return foods_; }
     int getScore() const { return score_; }
     GameState getState() const { return state_; }
     void setState(GameState s) { state_ = s; }
@@ -57,13 +62,16 @@ private:
     float rotation_;
     bool isBoosting_;
 
-    std::vector<Vector2f> foods_;
+    std::vector<Food> foods_;
     int score_;
     GameState state_;
 
     float baseSpeed_;
     float boostMultiplier_;
     float segmentDistance_;
+
+    float pendingGrowth_;
+    float pendingFoodLoss_;
 
     std::mt19937 rng_;
 };
