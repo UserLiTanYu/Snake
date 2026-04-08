@@ -25,7 +25,6 @@
     - `GLM` (用于矩阵计算，位于 `Utility.h`)
     - Android NDK (Native Development Kit)
 
-## 📂 核心文件结构
 
 ## 🚀 快速开始
 
