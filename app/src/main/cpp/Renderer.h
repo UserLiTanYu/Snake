@@ -46,10 +46,18 @@ private:
     void triggerGameOver();
 
     void triggerExitDialog();
-    void triggerReturnMenuDialog(); // 新增：调用 JNI 弹出返回主菜单对话框
+    void triggerReturnMenuDialog();
+
+    // 音频控制函数
+    void playSfx(int soundType); // 1=eat, 2=clink, 3=die
+    void playBgm(int musicMode); // 0=stop, 1=menu, 2=game
 
     std::atomic<bool> pendingExitDialog_{false};
-    std::atomic<bool> pendingReturnMenuDialog_{false}; // 新增：标志位
+    std::atomic<bool> pendingReturnMenuDialog_{false};
+
+    // 音频状态记录
+    GameState lastBgmState_ = (GameState)-1;
+    int lastScore_ = 0;
 
     void loadTextTextures();
     TextTexture createTextTexture(const std::string& text, int fontSize);
@@ -79,7 +87,7 @@ private:
     std::map<std::string, TextTexture> textTextures_;
     GLuint startBackgroundTextureId_;
     GLuint gameBackgroundTextureId_;
-    GLuint playingBackgroundTextureId_; // 新增：游戏进行时的背景纹理 ID
+    GLuint playingBackgroundTextureId_;
 
     static constexpr float kProjectionHalfHeight = 22.f;
 };

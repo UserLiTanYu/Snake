@@ -7,6 +7,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.SoundPool
 import android.os.Bundle
 import android.view.View
 import androidx.activity.OnBackPressedCallback
@@ -20,23 +23,155 @@ class MainActivity : GameActivity() {
         }
     }
 
+    // --- 音频管理变量 ---
+    private lateinit var soundPool: SoundPool
+    private var eatSoundId = 0
+    private var clinkSoundId = 0
+    private var dieSoundId = 0
+
+    private var menuBgmPlayer: MediaPlayer? = null
+    private var gameBgmPlayer: MediaPlayer? = null
+    private var currentMusicMode = 0 // 0=停止, 1=菜单BGM, 2=游戏BGM
+
     private external fun nativeIsAtMainMenu(): Boolean
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 核心：处理返回键事件
+        initAudio() // 初始化音频
+
+        // 处理返回键事件双重逻辑
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (nativeIsAtMainMenu()) {
-                    // 如果在主菜单或模式选择界面，弹出退出游戏确认框
-                    showExitDialog()
+                    showExitDialog() // 在主菜单：退出游戏
                 } else {
-                    // 如果在游戏中，弹出返回主菜单确认框
-                    showReturnToMenuDialog()
+                    showReturnToMenuDialog() // 在游戏中：返回主菜单
                 }
             }
         })
+    }
+
+    // --- 极度健壮的音频初始化 ---
+    private fun initAudio() {
+        // 初始化 SoundPool 用于短促音效
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_GAME)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(5)
+            .setAudioAttributes(audioAttributes)
+            .build()
+
+        try {
+            // 加载音效 (路径包含 musics/ 文件夹)
+            eatSoundId = soundPool.load(assets.openFd("musics/eat.wav"), 1)
+            clinkSoundId = soundPool.load(assets.openFd("musics/clink.wav"), 1)
+            dieSoundId = soundPool.load(assets.openFd("musics/die.mp3"), 1)
+
+            // 初始化 MediaPlayer 用于背景音乐，增加属性和错误监听
+            val bgmAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+
+            menuBgmPlayer = MediaPlayer().apply {
+                setAudioAttributes(bgmAttributes)
+                val fd = assets.openFd("musics/bgm.mp3")
+                setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+                fd.close() // 关键：关闭文件描述符
+                isLooping = true
+                setOnErrorListener { _, what, extra ->
+                    android.util.Log.e("AudioDebug", "Menu BGM 发生错误: what=$what, extra=$extra")
+                    true
+                }
+                prepare()
+            }
+
+            gameBgmPlayer = MediaPlayer().apply {
+                setAudioAttributes(bgmAttributes)
+                val fd = assets.openFd("musics/background.wav")
+                setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+                fd.close() // 关键：关闭文件描述符
+                isLooping = true
+                setOnErrorListener { _, what, extra ->
+                    android.util.Log.e("AudioDebug", "Game BGM 发生错误: what=$what, extra=$extra")
+                    true
+                }
+                prepare()
+            }
+            android.util.Log.d("AudioDebug", "音频初始化全部成功！")
+        } catch (e: Exception) {
+            android.util.Log.e("AudioDebug", "音频初始化发生崩溃", e)
+        }
+    }
+
+    // --- 供 C++ 调用的音效播放接口 ---
+    @Keep
+    fun playSoundEffect(soundType: Int) {
+        val soundId = when (soundType) {
+            1 -> eatSoundId
+            2 -> clinkSoundId
+            3 -> dieSoundId
+            else -> return
+        }
+        soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+    }
+
+    // --- 带有日志追踪的 BGM 控制接口 (确保在主线程执行) ---
+    @Keep
+    fun playBackgroundMusic(musicMode: Int) {
+        android.util.Log.d("AudioDebug", "C++ 请求切换音乐，目标模式: $musicMode")
+
+        runOnUiThread {
+            if (currentMusicMode == musicMode) return@runOnUiThread
+            currentMusicMode = musicMode
+
+            try {
+                // 更安全的暂停逻辑
+                if (menuBgmPlayer?.isPlaying == true) menuBgmPlayer?.pause()
+                if (gameBgmPlayer?.isPlaying == true) gameBgmPlayer?.pause()
+
+                when (musicMode) {
+                    1 -> {
+                        menuBgmPlayer?.seekTo(0)
+                        menuBgmPlayer?.start()
+                        android.util.Log.d("AudioDebug", "成功开始播放主界面 BGM")
+                    }
+                    2 -> {
+                        gameBgmPlayer?.seekTo(0)
+                        gameBgmPlayer?.start()
+                        android.util.Log.d("AudioDebug", "成功开始播放游戏内 BGM")
+                    }
+                    0 -> {
+                        android.util.Log.d("AudioDebug", "音乐已全部停止")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AudioDebug", "播放 BGM 时发生异常", e)
+            }
+        }
+    }
+
+    // 生命周期管理：进入后台时暂停音乐
+    override fun onPause() {
+        super.onPause()
+        menuBgmPlayer?.pause()
+        gameBgmPlayer?.pause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (currentMusicMode == 1) menuBgmPlayer?.start()
+        if (currentMusicMode == 2) gameBgmPlayer?.start()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        soundPool.release()
+        menuBgmPlayer?.release()
+        gameBgmPlayer?.release()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -70,7 +205,6 @@ class MainActivity : GameActivity() {
         }
     }
 
-    // --- 新增：游戏中按下返回键的弹窗 ---
     @Keep
     fun showReturnToMenuDialog() {
         runOnUiThread {
@@ -79,9 +213,9 @@ class MainActivity : GameActivity() {
                 .setMessage("当前游戏进度将会丢失。")
                 .setCancelable(false)
                 .setPositiveButton("返回主菜单") { _, _ ->
-                    nativeGoToMainMenu() // 调用 C++ 接口返回主菜单
+                    nativeGoToMainMenu()
                 }
-                .setNegativeButton("继续游戏", null) // 点击继续游戏则关闭弹窗，不做任何事
+                .setNegativeButton("继续游戏", null)
                 .show()
         }
     }

@@ -104,10 +104,9 @@ Renderer::Renderer(android_app *pApp) :
     gRenderer = this;
     initRenderer();
     loadTextTextures();
-    startBackgroundTextureId_ = loadBackgroundTexture("background.png");
-    gameBackgroundTextureId_ = loadBackgroundTexture("main.png");
-    // 新增：加载你加入的 background_game.png 图片
-    playingBackgroundTextureId_ = loadBackgroundTexture("background_game.png");
+    startBackgroundTextureId_ = loadBackgroundTexture("images/background.png");
+    gameBackgroundTextureId_ = loadBackgroundTexture("images/main.png");
+    playingBackgroundTextureId_ = loadBackgroundTexture("images/background_game.png");
     lastFrameTime_ = std::chrono::steady_clock::now();
 }
 
@@ -115,7 +114,6 @@ Renderer::~Renderer() {
     if (gRenderer == this) gRenderer = nullptr;
     if (startBackgroundTextureId_) glDeleteTextures(1, &startBackgroundTextureId_);
     if (gameBackgroundTextureId_) glDeleteTextures(1, &gameBackgroundTextureId_);
-    // 新增：退出时清理显存中的纹理
     if (playingBackgroundTextureId_) glDeleteTextures(1, &playingBackgroundTextureId_);
     for (auto& pair : textTextures_) glDeleteTextures(1, &pair.second.id);
 }
@@ -218,6 +216,34 @@ void Renderer::drawButton(float x, float y, float w, float h, float r, float g, 
     }
 }
 
+void Renderer::playSfx(int soundType) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        app_->activity->vm->AttachCurrentThread(&env, nullptr);
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID method = env->GetMethodID(clazz, "playSoundEffect", "(I)V");
+    if (method) env->CallVoidMethod(activityObj, method, (jint)soundType);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+}
+
+void Renderer::playBgm(int musicMode) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        app_->activity->vm->AttachCurrentThread(&env, nullptr);
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID method = env->GetMethodID(clazz, "playBackgroundMusic", "(I)V");
+    if (method) env->CallVoidMethod(activityObj, method, (jint)musicMode);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+}
+
 void Renderer::triggerExitDialog() {
     JNIEnv *env;
     app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6);
@@ -232,7 +258,6 @@ void Renderer::triggerExitDialog() {
     app_->activity->vm->DetachCurrentThread();
 }
 
-// --- 新增：调用 Java 层的方法显示返回主菜单的弹窗 ---
 void Renderer::triggerReturnMenuDialog() {
     JNIEnv *env;
     app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6);
@@ -256,7 +281,6 @@ void Renderer::render() {
         triggerExitDialog();
     }
 
-    // 新增：判断是否需要呼出返回菜单的弹窗
     if (pendingReturnMenuDialog_.load()) {
         pendingReturnMenuDialog_.store(false);
         triggerReturnMenuDialog();
@@ -268,8 +292,34 @@ void Renderer::render() {
     if (deltaTime > 0.033f) deltaTime = 0.033f;
 
     game_.update(deltaTime);
+
+    // BGM 状态管理
+    GameState currentState = game_.getState();
+    if (currentState != lastBgmState_) {
+        if (currentState == GameState::START_SCREEN || currentState == GameState::MODE_SELECTION) {
+            playBgm(1);
+        } else if (currentState == GameState::PLAYING) {
+            playBgm(2);
+        } else if (currentState == GameState::GAME_OVER) {
+            playBgm(0);
+        }
+        lastBgmState_ = currentState;
+    }
+
+    // 吃食物音效检测
+    if (currentState == GameState::START_SCREEN || currentState == GameState::MODE_SELECTION) {
+        lastScore_ = 0;
+    } else if (currentState == GameState::PLAYING) {
+        int currentScore = game_.getScore();
+        if (currentScore > lastScore_) {
+            playSfx(1); // 吃食物音效
+            lastScore_ = currentScore;
+        }
+    }
+
     if (game_.getState() == GameState::GAME_OVER && !wasGameOver_) {
         wasGameOver_ = true;
+        playSfx(3); // 死亡音效
         triggerGameOver();
     }
 
@@ -320,7 +370,6 @@ void Renderer::render() {
 
         float w = game_.getWorldWidth(), h = game_.getWorldHeight();
         if (playingBackgroundTextureId_) {
-            // 背景的中心点放在世界中心，大小设为世界的宽和高
             drawShape(w/2.0f - camX, h/2.0f - camY, w, h, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, playingBackgroundTextureId_);
         }
         drawShape(w/2.0f - camX, -camY, w, 0.4f, 1.0f, 0.1f, 0.1f, 1.0f);
@@ -391,7 +440,6 @@ void Renderer::handleInput() {
             if (state == GameState::START_SCREEN || state == GameState::MODE_SELECTION) {
                 pendingExitDialog_.store(true);
             } else {
-                // 新增：如果当前在游戏进行中，则标记需要弹出返回主菜单的窗口
                 pendingReturnMenuDialog_.store(true);
             }
             android_app_clear_key_events(inputBuffer);
@@ -413,11 +461,14 @@ void Renderer::handleInput() {
             float ny = (1.0f - py / (float)height_ * 2.0f) * kProjectionHalfHeight;
 
             if (game_.getState() == GameState::START_SCREEN) {
-                if (abs(nx) < 10.0f && abs(ny + 10.0f) < 4.0f) game_.setState(GameState::MODE_SELECTION);
+                if (abs(nx) < 10.0f && abs(ny + 10.0f) < 4.0f) {
+                    playSfx(2); // 点击音效
+                    game_.setState(GameState::MODE_SELECTION);
+                }
             } else if (game_.getState() == GameState::MODE_SELECTION) {
-                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) game_.startGame();
-                else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) game_.startGame();
-                else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) game_.startGame();
+                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
+                else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
+                else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
             } else if (game_.getState() == GameState::PLAYING) {
                 if (px < (float)width_ * 0.5f && joystickPointerId_ == -1) joystickPointerId_ = pointer.id;
                 else if (px >= (float)width_ * 0.5f && boostPointerId_ == -1) boostPointerId_ = pointer.id;
