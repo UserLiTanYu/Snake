@@ -41,7 +41,9 @@ private:
     void initRenderer();
     void updateRenderArea();
     void createModels();
-    void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0);
+
+    // 增加 uIsGear 开关支持着色器渲染齿轮
+    void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0, bool isGear = false);
     void drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& text = "");
     void triggerGameOver();
 
@@ -49,15 +51,20 @@ private:
     void triggerReturnMenuDialog();
 
     // 音频控制函数
-    void playSfx(int soundType); // 1=eat, 2=clink, 3=die
-    void playBgm(int musicMode); // 0=stop, 1=menu, 2=game
+    void playSfx(int soundType);
+    void playBgm(int musicMode);
+    void setAudioSetting(int type, bool enabled); // 同步设置给Java层
 
     std::atomic<bool> pendingExitDialog_{false};
     std::atomic<bool> pendingReturnMenuDialog_{false};
 
-    // 音频状态记录
     GameState lastBgmState_ = (GameState)-1;
+    GameState previousState_ = GameState::MODE_SELECTION; // 记录打开设置前的状态
     int lastScore_ = 0;
+
+    // --- 保存音乐和音效状态 ---
+    bool isMusicOn_ = true;
+    bool isSfxOn_ = true;
 
     void loadTextTextures();
     TextTexture createTextTexture(const std::string& text, int fontSize);

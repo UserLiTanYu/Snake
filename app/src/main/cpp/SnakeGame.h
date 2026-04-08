@@ -6,10 +6,12 @@
 #include <chrono>
 #include <cmath>
 
+// --- 修改：新增 PAUSED 状态 ---
 enum class GameState {
     START_SCREEN,
     MODE_SELECTION,
     PLAYING,
+    PAUSED, // <- 新增的暂停状态
     GAME_OVER
 };
 
@@ -50,19 +52,19 @@ private:
     float worldWidth_;
     float worldHeight_;
     std::vector<Vector2f> snake_;
-    std::vector<Vector2f> pathHistory_; // Used for smooth body trailing
-    
-    float rotation_; // Current movement angle
+    std::vector<Vector2f> pathHistory_;
+
+    float rotation_;
     bool isBoosting_;
-    
+
     std::vector<Vector2f> foods_;
     int score_;
     GameState state_;
 
     float baseSpeed_;
     float boostMultiplier_;
-    float segmentDistance_; // Distance between snake segments
-    
+    float segmentDistance_;
+
     std::mt19937 rng_;
 };
 

@@ -23,7 +23,6 @@ class MainActivity : GameActivity() {
         }
     }
 
-    // --- 音频管理变量 ---
     private lateinit var soundPool: SoundPool
     private var eatSoundId = 0
     private var clinkSoundId = 0
@@ -31,30 +30,32 @@ class MainActivity : GameActivity() {
 
     private var menuBgmPlayer: MediaPlayer? = null
     private var gameBgmPlayer: MediaPlayer? = null
-    private var currentMusicMode = 0 // 0=停止, 1=菜单BGM, 2=游戏BGM
+    private var currentMusicMode = 0
+
+    // --- 新增：音频静音开关 ---
+    private var isMusicEnabled = true
+    private var isSfxEnabled = true
 
     private external fun nativeIsAtMainMenu(): Boolean
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        initAudio() // 初始化音频
+        initAudio()
 
-        // 处理返回键事件双重逻辑
+        // 使用最高优先级的返回拦截器
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (nativeIsAtMainMenu()) {
-                    showExitDialog() // 在主菜单：退出游戏
+                    showExitDialog()
                 } else {
-                    showReturnToMenuDialog() // 在游戏中：返回主菜单
+                    showReturnToMenuDialog()
                 }
             }
         })
     }
 
-    // --- 极度健壮的音频初始化 ---
     private fun initAudio() {
-        // 初始化 SoundPool 用于短促音效
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -65,12 +66,10 @@ class MainActivity : GameActivity() {
             .build()
 
         try {
-            // 加载音效 (路径包含 musics/ 文件夹)
             eatSoundId = soundPool.load(assets.openFd("musics/eat.wav"), 1)
             clinkSoundId = soundPool.load(assets.openFd("musics/clink.wav"), 1)
             dieSoundId = soundPool.load(assets.openFd("musics/die.mp3"), 1)
 
-            // 初始化 MediaPlayer 用于背景音乐，增加属性和错误监听
             val bgmAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_GAME)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -80,12 +79,8 @@ class MainActivity : GameActivity() {
                 setAudioAttributes(bgmAttributes)
                 val fd = assets.openFd("musics/bgm.mp3")
                 setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
-                fd.close() // 关键：关闭文件描述符
+                fd.close()
                 isLooping = true
-                setOnErrorListener { _, what, extra ->
-                    android.util.Log.e("AudioDebug", "Menu BGM 发生错误: what=$what, extra=$extra")
-                    true
-                }
                 prepare()
             }
 
@@ -93,23 +88,18 @@ class MainActivity : GameActivity() {
                 setAudioAttributes(bgmAttributes)
                 val fd = assets.openFd("musics/background.wav")
                 setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
-                fd.close() // 关键：关闭文件描述符
+                fd.close()
                 isLooping = true
-                setOnErrorListener { _, what, extra ->
-                    android.util.Log.e("AudioDebug", "Game BGM 发生错误: what=$what, extra=$extra")
-                    true
-                }
                 prepare()
             }
-            android.util.Log.d("AudioDebug", "音频初始化全部成功！")
         } catch (e: Exception) {
-            android.util.Log.e("AudioDebug", "音频初始化发生崩溃", e)
+            e.printStackTrace()
         }
     }
 
-    // --- 供 C++ 调用的音效播放接口 ---
     @Keep
     fun playSoundEffect(soundType: Int) {
+        if (!isSfxEnabled) return // 如果音效关闭则直接返回
         val soundId = when (soundType) {
             1 -> eatSoundId
             2 -> clinkSoundId
@@ -119,42 +109,53 @@ class MainActivity : GameActivity() {
         soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
     }
 
-    // --- 带有日志追踪的 BGM 控制接口 (确保在主线程执行) ---
     @Keep
     fun playBackgroundMusic(musicMode: Int) {
-        android.util.Log.d("AudioDebug", "C++ 请求切换音乐，目标模式: $musicMode")
-
         runOnUiThread {
             if (currentMusicMode == musicMode) return@runOnUiThread
             currentMusicMode = musicMode
 
             try {
-                // 更安全的暂停逻辑
                 if (menuBgmPlayer?.isPlaying == true) menuBgmPlayer?.pause()
                 if (gameBgmPlayer?.isPlaying == true) gameBgmPlayer?.pause()
 
-                when (musicMode) {
-                    1 -> {
-                        menuBgmPlayer?.seekTo(0)
-                        menuBgmPlayer?.start()
-                        android.util.Log.d("AudioDebug", "成功开始播放主界面 BGM")
-                    }
-                    2 -> {
-                        gameBgmPlayer?.seekTo(0)
-                        gameBgmPlayer?.start()
-                        android.util.Log.d("AudioDebug", "成功开始播放游戏内 BGM")
-                    }
-                    0 -> {
-                        android.util.Log.d("AudioDebug", "音乐已全部停止")
+                if (isMusicEnabled) {
+                    when (musicMode) {
+                        1 -> {
+                            menuBgmPlayer?.seekTo(0)
+                            menuBgmPlayer?.start()
+                        }
+                        2 -> {
+                            gameBgmPlayer?.seekTo(0)
+                            gameBgmPlayer?.start()
+                        }
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("AudioDebug", "播放 BGM 时发生异常", e)
+                e.printStackTrace()
             }
         }
     }
 
-    // 生命周期管理：进入后台时暂停音乐
+    // --- 供 C++ 调用更改设置 ---
+    @Keep
+    fun setAudioSetting(type: Int, enabled: Boolean) {
+        runOnUiThread {
+            if (type == 1) { // 音乐开关
+                isMusicEnabled = enabled
+                if (!isMusicEnabled) {
+                    menuBgmPlayer?.pause()
+                    gameBgmPlayer?.pause()
+                } else {
+                    if (currentMusicMode == 1) menuBgmPlayer?.start()
+                    if (currentMusicMode == 2) gameBgmPlayer?.start()
+                }
+            } else if (type == 2) { // 音效开关
+                isSfxEnabled = enabled
+            }
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         menuBgmPlayer?.pause()
@@ -163,8 +164,10 @@ class MainActivity : GameActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (currentMusicMode == 1) menuBgmPlayer?.start()
-        if (currentMusicMode == 2) gameBgmPlayer?.start()
+        if (isMusicEnabled) {
+            if (currentMusicMode == 1) menuBgmPlayer?.start()
+            if (currentMusicMode == 2) gameBgmPlayer?.start()
+        }
     }
 
     override fun onDestroy() {
@@ -176,9 +179,7 @@ class MainActivity : GameActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUi()
-        }
+        if (hasFocus) hideSystemUi()
     }
 
     private fun hideSystemUi() {
@@ -197,9 +198,7 @@ class MainActivity : GameActivity() {
             AlertDialog.Builder(this)
                 .setTitle("退出游戏")
                 .setMessage("确定要离开蛇蛇大作战吗？")
-                .setPositiveButton("确认退出") { _, _ ->
-                    finish()
-                }
+                .setPositiveButton("确认退出") { _, _ -> finish() }
                 .setNegativeButton("再玩一会", null)
                 .show()
         }
@@ -212,9 +211,7 @@ class MainActivity : GameActivity() {
                 .setTitle("是否要返回主菜单？")
                 .setMessage("当前游戏进度将会丢失。")
                 .setCancelable(false)
-                .setPositiveButton("返回主菜单") { _, _ ->
-                    nativeGoToMainMenu()
-                }
+                .setPositiveButton("返回主菜单") { _, _ -> nativeGoToMainMenu() }
                 .setNegativeButton("继续游戏", null)
                 .show()
         }
@@ -227,12 +224,8 @@ class MainActivity : GameActivity() {
                 .setTitle("游戏结束")
                 .setMessage("你的最终得分是: $score\n要再试一次吗？")
                 .setCancelable(false)
-                .setPositiveButton("重新开始") { _, _ ->
-                    nativeRestartGame()
-                }
-                .setNegativeButton("返回主界面") { _, _ ->
-                    nativeGoToMainMenu()
-                }
+                .setPositiveButton("重新开始") { _, _ -> nativeRestartGame() }
+                .setNegativeButton("返回主界面") { _, _ -> nativeGoToMainMenu() }
                 .show()
         }
     }

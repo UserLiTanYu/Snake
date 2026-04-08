@@ -7,30 +7,29 @@
 #endif
 
 SnakeGame::SnakeGame(float worldWidth, float worldHeight)
-    : worldWidth_(worldWidth), worldHeight_(worldHeight), rng_(std::chrono::system_clock::now().time_since_epoch().count()) {
+        : worldWidth_(worldWidth), worldHeight_(worldHeight), rng_(std::chrono::system_clock::now().time_since_epoch().count()) {
     reset();
 }
 
 void SnakeGame::reset() {
     snake_.clear();
     pathHistory_.clear();
-    
+
     Vector2f head = {worldWidth_ / 2.0f, worldHeight_ / 2.0f};
     snake_.push_back(head);
-    
-    // Initial tail
+
     for (int i = 1; i < 5; ++i) {
         snake_.push_back({head.x, head.y - i * 0.5f});
     }
-    
-    rotation_ = M_PI / 2.0f; // Initial direction: UP
+
+    rotation_ = M_PI / 2.0f;
     isBoosting_ = false;
     score_ = 0;
     state_ = GameState::START_SCREEN;
     baseSpeed_ = 5.0f;
     boostMultiplier_ = 2.0f;
     segmentDistance_ = 0.5f;
-    
+
     foods_.clear();
     for (int i = 0; i < 25; ++i) spawnFood();
 }
@@ -50,11 +49,10 @@ void SnakeGame::setBoosting(bool boosting) {
 }
 
 void SnakeGame::update(float deltaTime) {
-    if (state_ != GameState::PLAYING) return;
-    
+    if (state_ != GameState::PLAYING) return; // 暂停状态会自动在这里被拦截
+
     move(deltaTime);
-    
-    // Food collision
+
     Vector2f head = snake_.front();
     auto it = foods_.begin();
     while (it != foods_.end()) {
@@ -69,7 +67,7 @@ void SnakeGame::update(float deltaTime) {
             ++it;
         }
     }
-    
+
     if (foods_.size() < 25 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.05f) {
         spawnFood();
     }
@@ -78,12 +76,11 @@ void SnakeGame::update(float deltaTime) {
 void SnakeGame::move(float deltaTime) {
     float speed = baseSpeed_;
     if (isBoosting_) speed *= boostMultiplier_;
-    
+
     Vector2f head = snake_.front();
     Vector2f direction = {std::cos(rotation_), std::sin(rotation_)};
     Vector2f nextHead = head + direction * speed * deltaTime;
-    
-    // Wall collision
+
     if (nextHead.x < 0 || nextHead.x > worldWidth_ || nextHead.y < 0 || nextHead.y > worldHeight_) {
         state_ = GameState::GAME_OVER;
         return;
@@ -102,7 +99,7 @@ void SnakeGame::move(float deltaTime) {
             current.y = prev.y + dy * ratio;
         }
     }
-    
+
     for (size_t i = 10; i < snake_.size(); ++i) {
         float dx = nextHead.x - snake_[i].x;
         float dy = nextHead.y - snake_[i].y;
