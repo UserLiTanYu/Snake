@@ -16,3 +16,29 @@
 #### 成员3
 完成更多玩法模块的开发，可以自己思考做什么模式
 
+等離子能量球 (Plasma Energy):
+A glowing plasma sphere, bright cyan and purple neon lights, sci-fi energy core, 2d game asset, circular icon, black background, vibrant colors.
+
+賽博龐克電路 (Cyberpunk Circuit):
+Circular game icon, cyberpunk style, glowing neon circuit patterns on dark metal, futuristic, vivid orange and blue, isolated on black background.
+
+全息投影/幾何光環 (Holographic Ring):
+A glowing holographic ring, neon pink and green, smooth gradient, abstract geometric sphere, clean edges, UI game asset.
+
+烈焰熔岩 (Lava / Magma):
+A glowing lava sphere, cracked obsidian stone with bright orange magma shining through, fantasy game asset, circular icon, 3d render, high detail.
+
+冰霜水晶 (Ice Crystal):
+A magical ice crystal sphere, glowing frost, cold blue and white tones, shiny, translucent, fantasy UI element, isolated on dark background.
+
+黃金神龍鱗片 (Golden Dragon Scales):
+Circular icon of golden dragon scales, shiny metallic reptile skin, emerald glowing accents, fantasy game asset, seamless texture, 3d stylized.
+
+炫彩黑曜石/珍珠質 (Iridescent Pearl):
+A perfect sphere of iridescent mother of pearl, glowing with rainbow colors, shiny surface, elegant, 3d game asset, circular icon.
+
+宇宙星空 (Galaxy / Nebula):
+A circular sphere containing a glowing deep space nebula, stars, purple and deep blue cosmic colors, magical, game UI icon, isolated.
+
+純粹黃金 (Solid Gold Chrome):
+A perfectly smooth shiny gold sphere, chrome reflection, luxurious, premium game asset, circular icon, high gloss.

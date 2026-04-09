@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cmath>
 
-// --- 修改：增加商店与皮肤背包状态 ---
 enum class GameState {
     START_SCREEN,
     MODE_SELECTION,
@@ -31,6 +30,7 @@ struct Food {
     Vector2f pos;
     bool isDropped;
     int colorType;
+    int value; // --- 核心新增：记录食物的质量价值 ---
 };
 
 enum class PowerUpType {
@@ -50,8 +50,11 @@ public:
 
     void update(float deltaTime);
     void setRotation(float angle);
-    float getRotation() const { return rotation_; } // 新增获取旋转角
+    float getRotation() const { return rotation_; }
     void setBoosting(bool boosting);
+
+    void setEquippedSkin(int skinId) { equippedSkin_ = skinId; }
+
     void reset();
 
     const std::vector<Vector2f>& getSnake() const { return snake_; }
@@ -85,6 +88,8 @@ private:
 
     int score_;
     GameState state_;
+
+    int equippedSkin_ = 0;
 
     float baseSpeed_;
     float boostMultiplier_;

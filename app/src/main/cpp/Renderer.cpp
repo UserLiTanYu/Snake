@@ -87,7 +87,6 @@ void main() {
         if (uColor.r > 0.99 && uColor.g > 0.99 && uColor.b > 0.99 && uColor.a > 0.99) {
             outColor = texColor;
         } else {
-            // 安全限制紋理透明度
             outColor = vec4(uColor.rgb, min(uColor.a, 1.0) * texColor.a);
         }
         return;
@@ -117,8 +116,6 @@ void main() {
         alpha = smoothstep(0.0, -0.02, dist);
     }
 
-    // --- 核心修改：純色模式 ---
-    // 如果傳入的透明度大於 1.005 (例如我們設定的 1.01f)，則不套用邊緣漸暗特效，渲染為純色！
     if (uColor.a > 1.005) {
         outColor = vec4(uColor.rgb, alpha);
     } else {
@@ -464,6 +461,7 @@ void Renderer::render() {
     lastFrameTime_ = now;
     if (deltaTime > 0.033f) deltaTime = 0.033f;
 
+    game_.setEquippedSkin(getEquippedSkin());
     game_.update(deltaTime);
 
     GameState currentState = game_.getState();
@@ -569,9 +567,33 @@ void Renderer::render() {
             }
         }
 
+        // 渲染食物（核心：大小按对数缩放，本体带皮肤贴图）
         for (const auto& food : game_.getFoods()) {
+            float foodScale = 1.0f;
+            if (food.value > 1) {
+                foodScale = 1.0f + std::log10(static_cast<float>(food.value)) * 0.8f;
+            }
+            float foodSize = 0.8f * foodScale;
+
             if (food.isDropped) {
-                drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, 0.0f, 1.0f, 1.0f, 1.0f, true);
+                int skinId = food.colorType;
+                if (skinId <= 7) {
+                    float r = 1.f, g = 1.f, b = 1.f;
+                    switch(skinId) {
+                        case 0: r=0.0f; g=1.0f; b=1.0f; break;
+                        case 1: r=1.0f; g=0.2f; b=0.2f; break;
+                        case 2: r=0.2f; g=1.0f; b=0.2f; break;
+                        case 3: r=1.0f; g=0.9f; b=0.2f; break;
+                        case 4: r=0.7f; g=0.2f; b=1.0f; break;
+                        case 5: r=1.0f; g=0.4f; b=0.8f; break;
+                        case 6: r=1.0f; g=0.6f; b=0.0f; break;
+                        case 7: r=0.6f; g=0.4f; b=0.2f; break;
+                    }
+                    drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, r, g, b, 1.0f, true);
+                } else {
+                    GLuint tex = skinTex_[skinId];
+                    drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, 1.0f, 1.0f, 1.0f, 1.0f, true, 0.0f, tex);
+                }
             } else {
                 float fr = 1.0f, fg = 1.0f, fb = 1.0f;
                 switch(food.colorType) {
@@ -582,7 +604,7 @@ void Renderer::render() {
                     case 4: fr = 0.7f; fg = 0.2f; fb = 1.0f; break;
                     case 5: fr = 1.0f; fg = 0.9f; fb = 0.2f; break;
                 }
-                drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, fr, fg, fb, 1.0f, true);
+                drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, fr, fg, fb, 1.0f, true);
             }
         }
 
@@ -684,7 +706,6 @@ void Renderer::render() {
             dynamicCoinText_ = createTextTexture("金币: " + std::to_string(currentCoins), 35);
         }
 
-        // --- 核心修改：傳入 1.01f 開啟純色模式，關閉邊緣發光 ---
         drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         int cols = 5;
@@ -704,7 +725,6 @@ void Renderer::render() {
 
             if (py > 25.0f || py < -25.0f) continue;
 
-            // 白色底框也使用 1.01f 純色模式
             drawShape(px, py, boxW + 0.4f, boxH + 0.4f, 0.8f, 0.8f, 0.8f, 1.0f, false, 0.2f);
             drawShape(px, py, boxW, boxH, 1.0f, 1.0f, 1.0f, 1.01f, false, 0.2f);
 
@@ -729,23 +749,21 @@ void Renderer::render() {
             }
         }
 
-        // --- 核心修改：頂部遮罩使用 1.01f 純色模式，100% 擋住滑上去的卡片 ---
-        drawShape(0, 22.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+        drawShape(0, 24.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         auto& titleTex = textTextures_["store_title"];
-        drawShape(0.3f, 15.7f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
-        drawShape(0.0f, 16.0f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 1.0f, 0.8f, 0.2f, 1.0f, false, 0.0f, titleTex.id);
+        drawShape(0.3f, 16.8f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
+        drawShape(0.0f, 17.0f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 1.0f, 0.8f, 0.2f, 1.0f, false, 0.0f, titleTex.id);
 
         if (dynamicCoinText_.id) {
             float tw = 12.0f;
             float th = tw * (dynamicCoinText_.height / dynamicCoinText_.width);
-            drawShape(-24.0f, 14.5f, tw, th, 0.9f, 0.6f, 0.1f, 1.0f, false, 0.0f, dynamicCoinText_.id);
+            drawShape(-24.0f, 15.5f, tw, th, 0.9f, 0.6f, 0.1f, 1.0f, false, 0.0f, dynamicCoinText_.id);
         }
 
-        drawButton(26.0f, 14.5f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
+        drawButton(26.0f, 16.5f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
     }
     else if (currentState == GameState::SKIN_INVENTORY) {
-        // --- 核心修改：傳入 1.01f 開啟純色模式，關閉邊緣發光 ---
         drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         int equipped = getEquippedSkin();
@@ -773,7 +791,6 @@ void Renderer::render() {
 
             if (py > 25.0f || py < -25.0f) continue;
 
-            // 白色底框也使用 1.01f 純色模式
             drawShape(px, py, boxW + 0.4f, boxH + 0.4f, 0.8f, 0.8f, 0.8f, 1.0f, false, 0.2f);
             drawShape(px, py, boxW, boxH, 1.0f, 1.0f, 1.0f, 1.01f, false, 0.2f);
 
@@ -805,14 +822,13 @@ void Renderer::render() {
             }
         }
 
-        // --- 核心修改：頂部遮罩使用 1.01f 純色模式，100% 擋住滑上去的卡片 ---
         drawShape(0, 24.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         auto& titleTex = textTextures_["inventory_title"];
         drawShape(0.3f, 17.3f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
         drawShape(0.0f, 17.5f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 1.0f, 0.8f, 0.2f, 1.0f, false, 0.0f, titleTex.id);
 
-        drawButton(26.0f, 16.0f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
+        drawButton(26.0f, 16.5f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
     }
 
     eglSwapBuffers(display_, surface_);

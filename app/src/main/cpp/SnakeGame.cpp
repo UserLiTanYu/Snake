@@ -40,9 +40,7 @@ void SnakeGame::reset() {
     powerUps_.clear();
 
     foods_.clear();
-    // --- 核心修改：初始食物數量變成 2 倍 ---
     for (int i = 0; i < 150; ++i) spawnFood();
-    // --- 核心修改：初始道具數量設定為 3 個 ---
     for (int i = 0; i < 3; ++i) spawnPowerUp();
 }
 
@@ -50,7 +48,8 @@ void SnakeGame::spawnFood() {
     std::uniform_real_distribution<float> distX(1.0f, worldWidth_ - 1.0f);
     std::uniform_real_distribution<float> distY(1.0f, worldHeight_ - 1.0f);
     std::uniform_int_distribution<int> distColor(0, 5);
-    foods_.push_back({{distX(rng_), distY(rng_)}, false, distColor(rng_)});
+    // 默认食物价值为 1
+    foods_.push_back({{distX(rng_), distY(rng_)}, false, distColor(rng_), 1});
 }
 
 void SnakeGame::spawnPowerUp() {
@@ -99,11 +98,18 @@ void SnakeGame::update(float deltaTime) {
     while (it != foods_.end()) {
         float dx = head.x - it->pos.x;
         float dy = head.y - it->pos.y;
-        if (std::sqrt(dx*dx + dy*dy) < eatRadius) {
-            score_++;
-            it = foods_.erase(it);
 
-            float growthAmount = 1.0f / scaleBase;
+        // 核心修改：动态适应大食物的吃取半径
+        float foodScale = 1.0f;
+        if (it->value > 1) {
+            foodScale = 1.0f + std::log10(static_cast<float>(it->value)) * 0.8f;
+        }
+        float currentFoodRadius = 0.4f * foodScale;
+
+        if (std::sqrt(dx*dx + dy*dy) < eatRadius + currentFoodRadius) {
+            // 完美还原失去的质量
+            score_ += it->value;
+            float growthAmount = (float)it->value / scaleBase;
             pendingGrowth_ += growthAmount;
 
             while (pendingGrowth_ >= 1.0f) {
@@ -111,7 +117,7 @@ void SnakeGame::update(float deltaTime) {
                 pendingGrowth_ -= 1.0f;
             }
 
-            // --- 核心修改：補充食物的閥值翻倍 ---
+            it = foods_.erase(it);
             if (foods_.size() < 90) spawnFood();
         } else {
             ++it;
@@ -132,15 +138,13 @@ void SnakeGame::update(float deltaTime) {
         }
     }
 
-    // --- 核心修改：隨機生成食物的上限翻倍 ---
     if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
         spawnFood();
     }
 
-    // --- 核心修改：維持場上有 3~5 個道具 ---
-    while (powerUps_.size() < 3) spawnPowerUp(); // 少於 3 個強制補充
+    while (powerUps_.size() < 3) spawnPowerUp();
     if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
-        spawnPowerUp(); // 少於 5 個時隨機生成
+        spawnPowerUp();
     }
 }
 
@@ -158,18 +162,23 @@ void SnakeGame::move(float deltaTime) {
         pendingFoodLoss_ += foodPenaltyRate * deltaTime;
 
         while (pendingFoodLoss_ >= 1.0f && score_ > 0) {
-            score_--;
             pendingFoodLoss_ -= 1.0f;
 
-            // --- 核心修改：排泄食物的上限也要翻倍，避免被吃光 ---
+            // 核心修改：蛇越大，排泄的单块质量（Value）越高！
+            int dropValue = 1 + score_ / 30;
+            if (score_ < dropValue) dropValue = score_;
+            score_ -= dropValue;
+
             if (foods_.size() < 300 && !snake_.empty()) {
-                foods_.push_back({snake_.back(), true, 0});
+                // 将 equippedSkin_ 作为食物颜色记录下来，并带上它的价值！
+                foods_.push_back({snake_.back(), true, equippedSkin_, dropValue});
             }
 
             float scaleBase = 1.0f + std::min(score_ * 0.02f, 2.0f);
-            float lengthLoss = 1.0f / scaleBase;
+            float lengthLoss = (float)dropValue / scaleBase;
             pendingGrowth_ -= lengthLoss;
 
+            // 扣除掉对应的蛇身长度
             while (pendingGrowth_ < 0.0f && snake_.size() > 5) {
                 snake_.pop_back();
                 pendingGrowth_ += 1.0f;
