@@ -1,6 +1,8 @@
 package com.example.snake
 
 import android.app.AlertDialog
+import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -32,18 +34,19 @@ class MainActivity : GameActivity() {
     private var gameBgmPlayer: MediaPlayer? = null
     private var currentMusicMode = 0
 
-    // --- 新增：音频静音开关 ---
     private var isMusicEnabled = true
     private var isSfxEnabled = true
+
+    private lateinit var prefs: SharedPreferences
 
     private external fun nativeIsAtMainMenu(): Boolean
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        prefs = getSharedPreferences("SnakeGamePrefs", Context.MODE_PRIVATE)
         initAudio()
 
-        // 使用最高优先级的返回拦截器
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (nativeIsAtMainMenu()) {
@@ -53,6 +56,44 @@ class MainActivity : GameActivity() {
                 }
             }
         })
+    }
+
+    @Keep
+    fun getCoins(): Int = prefs.getInt("coins", 0)
+
+    @Keep
+    fun addCoins(amount: Int) {
+        prefs.edit().putInt("coins", getCoins() + amount).apply()
+    }
+
+    @Keep
+    fun isSkinOwned(skinId: Int): Boolean {
+        // --- 核心修改：0到7号为免费基础色皮肤，自动永久拥有 ---
+        if (skinId <= 7) return true
+        return prefs.getBoolean("skin_owned_$skinId", false)
+    }
+
+    @Keep
+    fun buySkin(skinId: Int, price: Int): Boolean {
+        val currentCoins = getCoins()
+        if (currentCoins >= price && !isSkinOwned(skinId)) {
+            prefs.edit()
+                .putInt("coins", currentCoins - price)
+                .putBoolean("skin_owned_$skinId", true)
+                .apply()
+            return true
+        }
+        return false
+    }
+
+    @Keep
+    fun getEquippedSkin(): Int = prefs.getInt("equipped_skin", 0)
+
+    @Keep
+    fun equipSkin(skinId: Int) {
+        if (isSkinOwned(skinId)) {
+            prefs.edit().putInt("equipped_skin", skinId).apply()
+        }
     }
 
     private fun initAudio() {
@@ -99,7 +140,7 @@ class MainActivity : GameActivity() {
 
     @Keep
     fun playSoundEffect(soundType: Int) {
-        if (!isSfxEnabled) return // 如果音效关闭则直接返回
+        if (!isSfxEnabled) return
         val soundId = when (soundType) {
             1 -> eatSoundId
             2 -> clinkSoundId
@@ -137,11 +178,10 @@ class MainActivity : GameActivity() {
         }
     }
 
-    // --- 供 C++ 调用更改设置 ---
     @Keep
     fun setAudioSetting(type: Int, enabled: Boolean) {
         runOnUiThread {
-            if (type == 1) { // 音乐开关
+            if (type == 1) {
                 isMusicEnabled = enabled
                 if (!isMusicEnabled) {
                     menuBgmPlayer?.pause()
@@ -150,7 +190,7 @@ class MainActivity : GameActivity() {
                     if (currentMusicMode == 1) menuBgmPlayer?.start()
                     if (currentMusicMode == 2) gameBgmPlayer?.start()
                 }
-            } else if (type == 2) { // 音效开关
+            } else if (type == 2) {
                 isSfxEnabled = enabled
             }
         }
@@ -218,11 +258,11 @@ class MainActivity : GameActivity() {
     }
 
     @Keep
-    fun showGameOverDialog(score: Int) {
+    fun showGameOverDialog(score: Int, coins: Int) {
         runOnUiThread {
             AlertDialog.Builder(this)
                 .setTitle("游戏结束")
-                .setMessage("你的最终得分是: $score\n要再试一次吗？")
+                .setMessage("你的最终得分是: $score\n获得金币: $coins\n要再试一次吗？")
                 .setCancelable(false)
                 .setPositiveButton("重新开始") { _, _ -> nativeRestartGame() }
                 .setNegativeButton("返回主界面") { _, _ -> nativeGoToMainMenu() }

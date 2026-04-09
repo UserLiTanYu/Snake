@@ -34,15 +34,16 @@ void SnakeGame::reset() {
     pendingGrowth_ = 0.0f;
     pendingFoodLoss_ = 0.0f;
 
-    // 重置道具状态
     speedTimer_ = 0.0f;
     shieldTimer_ = 0.0f;
     magnetTimer_ = 0.0f;
     powerUps_.clear();
 
     foods_.clear();
-    for (int i = 0; i < 75; ++i) spawnFood();
-    for (int i = 0; i < 2; ++i) spawnPowerUp(); // 初始生成2个道具
+    // --- 核心修改：初始食物數量變成 2 倍 ---
+    for (int i = 0; i < 150; ++i) spawnFood();
+    // --- 核心修改：初始道具數量設定為 3 個 ---
+    for (int i = 0; i < 3; ++i) spawnPowerUp();
 }
 
 void SnakeGame::spawnFood() {
@@ -52,11 +53,10 @@ void SnakeGame::spawnFood() {
     foods_.push_back({{distX(rng_), distY(rng_)}, false, distColor(rng_)});
 }
 
-// --- 新增：随机生成道具逻辑 ---
 void SnakeGame::spawnPowerUp() {
     std::uniform_real_distribution<float> distX(2.0f, worldWidth_ - 2.0f);
     std::uniform_real_distribution<float> distY(2.0f, worldHeight_ - 2.0f);
-    std::uniform_int_distribution<int> distType(0, 2); // 0=SPEED, 1=SHIELD, 2=MAGNET
+    std::uniform_int_distribution<int> distType(0, 2);
     powerUps_.push_back({{distX(rng_), distY(rng_)}, static_cast<PowerUpType>(distType(rng_))});
 }
 
@@ -71,7 +71,6 @@ void SnakeGame::setBoosting(bool boosting) {
 void SnakeGame::update(float deltaTime) {
     if (state_ != GameState::PLAYING) return;
 
-    // --- 更新增益倒计时 ---
     if (speedTimer_ > 0.0f) speedTimer_ = std::max(0.0f, speedTimer_ - deltaTime);
     if (shieldTimer_ > 0.0f) shieldTimer_ = std::max(0.0f, shieldTimer_ - deltaTime);
     if (magnetTimer_ > 0.0f) magnetTimer_ = std::max(0.0f, magnetTimer_ - deltaTime);
@@ -82,10 +81,9 @@ void SnakeGame::update(float deltaTime) {
     float eatRadius = 1.0f * scaleBase;
     Vector2f head = snake_.front();
 
-    // --- 核心：磁铁吸附食物逻辑 ---
     if (magnetTimer_ > 0.0f) {
-        float magnetRadius = 4.0f * scaleBase; // 吸引范围随体型增大
-        float pullSpeed = 20.0f * scaleBase;   // 吸引速度随体型增大
+        float magnetRadius = 4.0f * scaleBase;
+        float pullSpeed = 25.0f * scaleBase;
         for (auto& food : foods_) {
             float dx = head.x - food.pos.x;
             float dy = head.y - food.pos.y;
@@ -97,7 +95,6 @@ void SnakeGame::update(float deltaTime) {
         }
     }
 
-    // --- 检查吃食物 ---
     auto it = foods_.begin();
     while (it != foods_.end()) {
         float dx = head.x - it->pos.x;
@@ -114,18 +111,18 @@ void SnakeGame::update(float deltaTime) {
                 pendingGrowth_ -= 1.0f;
             }
 
-            if (foods_.size() < 45) spawnFood();
+            // --- 核心修改：補充食物的閥值翻倍 ---
+            if (foods_.size() < 90) spawnFood();
         } else {
             ++it;
         }
     }
 
-    // --- 检查吃道具 ---
     auto puIt = powerUps_.begin();
     while (puIt != powerUps_.end()) {
         float dx = head.x - puIt->pos.x;
         float dy = head.y - puIt->pos.y;
-        if (std::sqrt(dx*dx + dy*dy) < eatRadius * 1.5f) { // 道具判定稍微大一点
+        if (std::sqrt(dx*dx + dy*dy) < eatRadius * 1.5f) {
             if (puIt->type == PowerUpType::SPEED) speedTimer_ = 3.0f;
             else if (puIt->type == PowerUpType::SHIELD) shieldTimer_ = 5.0f;
             else if (puIt->type == PowerUpType::MAGNET) magnetTimer_ = 3.0f;
@@ -135,14 +132,15 @@ void SnakeGame::update(float deltaTime) {
         }
     }
 
-    if (foods_.size() < 75 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
+    // --- 核心修改：隨機生成食物的上限翻倍 ---
+    if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
         spawnFood();
     }
 
-    // 维持场上有 1~3 个道具
-    if (powerUps_.empty()) spawnPowerUp();
-    else if (powerUps_.size() < 3 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.005f) {
-        spawnPowerUp();
+    // --- 核心修改：維持場上有 3~5 個道具 ---
+    while (powerUps_.size() < 3) spawnPowerUp(); // 少於 3 個強制補充
+    if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
+        spawnPowerUp(); // 少於 5 個時隨機生成
     }
 }
 
@@ -154,7 +152,6 @@ void SnakeGame::move(float deltaTime) {
 
     float speed = baseSpeed_;
 
-    // --- 核心：判断是否处于加速药水状态 ---
     if (actuallyBoosting) {
         speed *= boostMultiplier_;
         float foodPenaltyRate = 1.0f;
@@ -164,7 +161,8 @@ void SnakeGame::move(float deltaTime) {
             score_--;
             pendingFoodLoss_ -= 1.0f;
 
-            if (foods_.size() < 150 && !snake_.empty()) {
+            // --- 核心修改：排泄食物的上限也要翻倍，避免被吃光 ---
+            if (foods_.size() < 300 && !snake_.empty()) {
                 foods_.push_back({snake_.back(), true, 0});
             }
 
@@ -178,7 +176,7 @@ void SnakeGame::move(float deltaTime) {
             }
         }
     } else if (speedTimer_ > 0.0f) {
-        speed *= boostMultiplier_; // 药水加速，不消耗体重！
+        speed *= boostMultiplier_;
     }
 
     float scaleBase = 1.0f + std::min(score_ * 0.02f, 2.0f);
@@ -189,9 +187,7 @@ void SnakeGame::move(float deltaTime) {
     Vector2f direction = {std::cos(rotation_), std::sin(rotation_)};
     Vector2f nextHead = head + direction * speed * deltaTime;
 
-    // --- 核心：护盾免疫撞墙机制逻辑 ---
     if (shieldTimer_ > 0.0f) {
-        // 碰到墙壁不会死亡，也不会穿墙，而是强制限制在边界内（贴墙滑行）
         if (nextHead.x < 0) nextHead.x = 0;
         else if (nextHead.x > worldWidth_) nextHead.x = worldWidth_;
         if (nextHead.y < 0) nextHead.y = 0;
@@ -218,7 +214,6 @@ void SnakeGame::move(float deltaTime) {
         }
     }
 
-    // --- 核心：护盾免疫自撞逻辑 ---
     if (shieldTimer_ <= 0.0f) {
         for (size_t i = 10; i < snake_.size(); ++i) {
             float dx = nextHead.x - snake_[i].x;

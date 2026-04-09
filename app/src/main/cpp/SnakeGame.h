@@ -6,11 +6,14 @@
 #include <chrono>
 #include <cmath>
 
+// --- 修改：增加商店与皮肤背包状态 ---
 enum class GameState {
     START_SCREEN,
     MODE_SELECTION,
     PLAYING,
     PAUSED,
+    STORE,
+    SKIN_INVENTORY,
     GAME_OVER
 };
 
@@ -30,7 +33,6 @@ struct Food {
     int colorType;
 };
 
-// --- 新增：定义道具类型和结构 ---
 enum class PowerUpType {
     SPEED,
     SHIELD,
@@ -47,25 +49,26 @@ public:
     SnakeGame(float worldWidth, float worldHeight);
 
     void update(float deltaTime);
-    void setRotation(float angle); // 0 to 2*PI
+    void setRotation(float angle);
+    float getRotation() const { return rotation_; } // 新增获取旋转角
     void setBoosting(bool boosting);
     void reset();
 
     const std::vector<Vector2f>& getSnake() const { return snake_; }
     const std::vector<Food>& getFoods() const { return foods_; }
-    const std::vector<PowerUp>& getPowerUps() const { return powerUps_; } // 获取道具列表
+    const std::vector<PowerUp>& getPowerUps() const { return powerUps_; }
     int getScore() const { return score_; }
     GameState getState() const { return state_; }
     void setState(GameState s) { state_ = s; }
     void startGame() { state_ = GameState::PLAYING; }
-    bool hasShield() const { return shieldTimer_ > 0.0f; } // 提供给渲染器判断是否绘制护盾光圈
+    bool hasShield() const { return shieldTimer_ > 0.0f; }
 
     float getWorldWidth() const { return worldWidth_; }
     float getWorldHeight() const { return worldHeight_; }
 
 private:
     void spawnFood();
-    void spawnPowerUp(); // 生成道具
+    void spawnPowerUp();
     void move(float deltaTime);
     bool checkCollisionWithSelf() const;
 
@@ -78,7 +81,7 @@ private:
     bool isBoosting_;
 
     std::vector<Food> foods_;
-    std::vector<PowerUp> powerUps_; // 道具列表
+    std::vector<PowerUp> powerUps_;
 
     int score_;
     GameState state_;
@@ -90,7 +93,6 @@ private:
     float pendingGrowth_;
     float pendingFoodLoss_;
 
-    // --- 新增：道具状态计时器 ---
     float speedTimer_;
     float shieldTimer_;
     float magnetTimer_;

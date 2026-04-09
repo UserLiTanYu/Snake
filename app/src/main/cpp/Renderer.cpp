@@ -52,9 +52,16 @@ out vec2 fragUV;
 uniform mat4 uProjection;
 uniform vec3 uOffset;
 uniform vec2 uScale;
+uniform float uRotation;
 void main() {
     fragUV = inUV;
-    vec3 pos = (inPosition * vec3(uScale, 1.0)) + uOffset;
+    float c = cos(uRotation);
+    float s = sin(uRotation);
+    vec2 rotatedPos = vec2(
+        inPosition.x * c - inPosition.y * s,
+        inPosition.x * s + inPosition.y * c
+    );
+    vec3 pos = vec3(rotatedPos * uScale, inPosition.z) + uOffset;
     gl_Position = uProjection * vec4(pos, 1.0);
 }
 )vertex";
@@ -76,10 +83,12 @@ void main() {
         vec2 correctedUV = vec2(fragUV.x, 1.0 - fragUV.y);
         vec4 texColor = texture(uTexture, correctedUV);
         texColor = texColor.bgra;
+
         if (uColor.r > 0.99 && uColor.g > 0.99 && uColor.b > 0.99 && uColor.a > 0.99) {
             outColor = texColor;
         } else {
-            outColor = vec4(uColor.rgb, uColor.a * texColor.a);
+            // 安全限制紋理透明度
+            outColor = vec4(uColor.rgb, min(uColor.a, 1.0) * texColor.a);
         }
         return;
     }
@@ -107,18 +116,29 @@ void main() {
         float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - uRadius;
         alpha = smoothstep(0.0, -0.02, dist);
     }
-    float glow = 1.0 - length(p) * 1.2;
-    outColor = vec4(uColor.rgb, uColor.a * alpha * (0.7 + 0.3 * glow));
+
+    // --- 核心修改：純色模式 ---
+    // 如果傳入的透明度大於 1.005 (例如我們設定的 1.01f)，則不套用邊緣漸暗特效，渲染為純色！
+    if (uColor.a > 1.005) {
+        outColor = vec4(uColor.rgb, alpha);
+    } else {
+        float glow = 1.0 - length(p) * 1.2;
+        outColor = vec4(uColor.rgb, uColor.a * alpha * (0.7 + 0.3 * glow));
+    }
 }
 )fragment";
 
 Renderer::Renderer(android_app *pApp) :
         app_(pApp), display_(EGL_NO_DISPLAY), surface_(EGL_NO_SURFACE), context_(EGL_NO_CONTEXT),
-        width_(0), height_(0), shaderNeedsNewProjectionMatrix_(true), game_(120.0f, 80.0f),
+        width_(0), height_(0), shaderNeedsNewProjectionMatrix_(true), game_(180.0f, 120.0f),
         joystickTiltX_(0), joystickTiltY_(0), joystickPointerId_(-1), boostPointerId_(-1),
         joyPixelX_(0), joyPixelY_(0), wasGameOver_(false), pendingRestart_(false), pendingMainMenu_(false),
         startBackgroundTextureId_(0), gameBackgroundTextureId_(0), playingBackgroundTextureId_(0),
         speedTextureId_(0), shieldTextureId_(0), magnetTextureId_(0) {
+
+    for(int i=0; i<=19; i++) { skinTex_[i] = 0; }
+    dynamicCoinText_.id = 0;
+
     gRenderer = this;
     initRenderer();
     loadTextTextures();
@@ -126,10 +146,22 @@ Renderer::Renderer(android_app *pApp) :
     gameBackgroundTextureId_ = loadBackgroundTexture("images/main.png");
     playingBackgroundTextureId_ = loadBackgroundTexture("images/background_game.png");
 
-    // --- 载入道具图片资源 ---
     speedTextureId_ = loadBackgroundTexture("images/speed.png");
     shieldTextureId_ = loadBackgroundTexture("images/shield.png");
     magnetTextureId_ = loadBackgroundTexture("images/magnet.png");
+
+    skinTex_[8] = loadBackgroundTexture("images/skin_1.png");
+    skinTex_[9] = loadBackgroundTexture("images/skin_2.png");
+    skinTex_[10] = loadBackgroundTexture("images/skin_3.png");
+    skinTex_[11] = loadBackgroundTexture("images/skin_4.png");
+    skinTex_[12] = loadBackgroundTexture("images/skin_5.png");
+    skinTex_[13] = loadBackgroundTexture("images/skin_6.png");
+    skinTex_[14] = loadBackgroundTexture("images/skin_7.png");
+    skinTex_[15] = loadBackgroundTexture("images/skin_8.png");
+    skinTex_[16] = loadBackgroundTexture("images/skin_9.png");
+    skinTex_[17] = loadBackgroundTexture("images/skin_10.png");
+    skinTex_[18] = loadBackgroundTexture("images/skin_11.png");
+    skinTex_[19] = loadBackgroundTexture("images/skin_12.png");
 
     lastFrameTime_ = std::chrono::steady_clock::now();
 }
@@ -142,7 +174,58 @@ Renderer::~Renderer() {
     if (speedTextureId_) glDeleteTextures(1, &speedTextureId_);
     if (shieldTextureId_) glDeleteTextures(1, &shieldTextureId_);
     if (magnetTextureId_) glDeleteTextures(1, &magnetTextureId_);
+    for(int i=8; i<=19; i++) {
+        if(skinTex_[i]) glDeleteTextures(1, &skinTex_[i]);
+    }
+    if (dynamicCoinText_.id) glDeleteTextures(1, &dynamicCoinText_.id);
     for (auto& pair : textTextures_) glDeleteTextures(1, &pair.second.id);
+}
+
+int Renderer::getCoins() {
+    JNIEnv *env; bool nd = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
+    jmethodID mid = env->GetMethodID(env->GetObjectClass(app_->activity->javaGameActivity), "getCoins", "()I");
+    int res = env->CallIntMethod(app_->activity->javaGameActivity, mid);
+    if (nd) app_->activity->vm->DetachCurrentThread();
+    return res;
+}
+void Renderer::addCoins(int amount) {
+    JNIEnv *env; bool nd = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
+    jmethodID mid = env->GetMethodID(env->GetObjectClass(app_->activity->javaGameActivity), "addCoins", "(I)V");
+    env->CallVoidMethod(app_->activity->javaGameActivity, mid, amount);
+    if (nd) app_->activity->vm->DetachCurrentThread();
+}
+bool Renderer::isSkinOwned(int skinId) {
+    JNIEnv *env; bool nd = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
+    jmethodID mid = env->GetMethodID(env->GetObjectClass(app_->activity->javaGameActivity), "isSkinOwned", "(I)Z");
+    bool res = env->CallBooleanMethod(app_->activity->javaGameActivity, mid, skinId);
+    if (nd) app_->activity->vm->DetachCurrentThread();
+    return res;
+}
+bool Renderer::buySkin(int skinId, int price) {
+    JNIEnv *env; bool nd = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
+    jmethodID mid = env->GetMethodID(env->GetObjectClass(app_->activity->javaGameActivity), "buySkin", "(II)Z");
+    bool res = env->CallBooleanMethod(app_->activity->javaGameActivity, mid, skinId, price);
+    if (nd) app_->activity->vm->DetachCurrentThread();
+    return res;
+}
+int Renderer::getEquippedSkin() {
+    JNIEnv *env; bool nd = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
+    jmethodID mid = env->GetMethodID(env->GetObjectClass(app_->activity->javaGameActivity), "getEquippedSkin", "()I");
+    int res = env->CallIntMethod(app_->activity->javaGameActivity, mid);
+    if (nd) app_->activity->vm->DetachCurrentThread();
+    return res;
+}
+void Renderer::equipSkin(int skinId) {
+    JNIEnv *env; bool nd = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
+    jmethodID mid = env->GetMethodID(env->GetObjectClass(app_->activity->javaGameActivity), "equipSkin", "(I)V");
+    env->CallVoidMethod(app_->activity->javaGameActivity, mid, skinId);
+    if (nd) app_->activity->vm->DetachCurrentThread();
 }
 
 GLuint Renderer::loadBackgroundTexture(const std::string& fileName) {
@@ -220,7 +303,6 @@ void Renderer::loadTextTextures() {
     textTextures_["endless"] = createTextTexture("无尽模式", 40);
     textTextures_["challenge"] = createTextTexture("挑战模式", 40);
     textTextures_["more"] = createTextTexture("更多玩法", 40);
-
     textTextures_["music_on"] = createTextTexture("音乐: 开", 40);
     textTextures_["music_off"] = createTextTexture("音乐: 关", 40);
     textTextures_["sfx_on"] = createTextTexture("音效: 开", 40);
@@ -229,12 +311,50 @@ void Renderer::loadTextTextures() {
     textTextures_["main_menu"] = createTextTexture("返回主界面", 40);
     textTextures_["quit"] = createTextTexture("退出游戏", 40);
     textTextures_["settings"] = createTextTexture("游戏设置", 50);
+
+    textTextures_["store_btn"] = createTextTexture("商店", 40);
+    textTextures_["inventory_btn"] = createTextTexture("皮肤", 40);
+    textTextures_["store_title"] = createTextTexture("皮肤商店", 50);
+    textTextures_["inventory_title"] = createTextTexture("皮肤库", 50);
+    textTextures_["buy"] = createTextTexture("购买", 30);
+    textTextures_["owned"] = createTextTexture("已拥有", 30);
+    textTextures_["equip"] = createTextTexture("穿戴", 30);
+    textTextures_["equipped"] = createTextTexture("已穿戴", 30);
+
+    textTextures_["price_500"] = createTextTexture("500 金币", 30);
+    textTextures_["price_1000"] = createTextTexture("1000 金币", 30);
+    textTextures_["price_2000"] = createTextTexture("2000 金币", 30);
+    textTextures_["price_3000"] = createTextTexture("3000 金币", 30);
+    textTextures_["price_5000"] = createTextTexture("5000 金币", 30);
+    textTextures_["price_6000"] = createTextTexture("6000 金币", 30);
+    textTextures_["price_8000"] = createTextTexture("8000 金币", 30);
+    textTextures_["price_10000"] = createTextTexture("10000 金币", 30);
+
+    textTextures_["skin_0"] = createTextTexture("青色", 25);
+    textTextures_["skin_1"] = createTextTexture("红色", 25);
+    textTextures_["skin_2"] = createTextTexture("绿色", 25);
+    textTextures_["skin_3"] = createTextTexture("黄色", 25);
+    textTextures_["skin_4"] = createTextTexture("紫色", 25);
+    textTextures_["skin_5"] = createTextTexture("粉色", 25);
+    textTextures_["skin_6"] = createTextTexture("橙色", 25);
+    textTextures_["skin_7"] = createTextTexture("褐色", 25);
+
+    textTextures_["skin_8"] = createTextTexture("棉花糖", 25);
+    textTextures_["skin_9"] = createTextTexture("毛绒球", 25);
+    textTextures_["skin_10"] = createTextTexture("大西瓜", 25);
+    textTextures_["skin_11"] = createTextTexture("等离子", 25);
+    textTextures_["skin_12"] = createTextTexture("金刚体", 25);
+    textTextures_["skin_13"] = createTextTexture("熔岩球", 25);
+    textTextures_["skin_14"] = createTextTexture("霓虹体", 25);
+    textTextures_["skin_15"] = createTextTexture("冰霜晶", 25);
+    textTextures_["skin_16"] = createTextTexture("神鳞片", 25);
+    textTextures_["skin_17"] = createTextTexture("珍珠贝", 25);
+    textTextures_["skin_18"] = createTextTexture("暗星空", 25);
+    textTextures_["skin_19"] = createTextTexture("纯金球", 25);
 }
 
 void Renderer::drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& label) {
     float alpha = active ? 0.8f : 0.2f;
-
-    // --- 核心修改：减小圆角半径，变成标准的带圆角长方形 ---
     float cornerRadius = 0.15f;
 
     drawShape(x, y, w + 0.6f, h + 0.6f, r, g, b, 0.1f, false, cornerRadius + 0.05f);
@@ -245,8 +365,8 @@ void Renderer::drawButton(float x, float y, float w, float h, float r, float g, 
         auto& tex = textTextures_[label];
         float tw = tex.width;
         float th = tex.height;
-        float maxW = w * 0.75f;
-        float maxH = h * 0.6f;
+        float maxW = w * 0.8f;
+        float maxH = h * 0.65f;
         if (tw > maxW || th > maxH) {
             float scale = std::min(maxW / tw, maxH / th);
             tw *= scale; th *= scale;
@@ -349,7 +469,7 @@ void Renderer::render() {
     GameState currentState = game_.getState();
     GameState renderState = currentState;
 
-    if (currentState == GameState::PAUSED) {
+    if (currentState == GameState::PAUSED || currentState == GameState::STORE || currentState == GameState::SKIN_INVENTORY) {
         renderState = previousState_;
     }
 
@@ -377,6 +497,8 @@ void Renderer::render() {
     if (currentState == GameState::GAME_OVER && !wasGameOver_) {
         wasGameOver_ = true;
         playSfx(3);
+        int earnedCoins = game_.getScore() * 10;
+        addCoins(earnedCoins);
         triggerGameOver();
     }
 
@@ -405,16 +527,22 @@ void Renderer::render() {
         drawButton(0, -10.0f, 20.0f, 8.0f, 0.0f, 1.0f, 0.7f, true, "start");
     }
     else if (renderState == GameState::MODE_SELECTION) {
-        if (gameBackgroundTextureId_) {
-            drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, gameBackgroundTextureId_);
+        if (currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY) {
+            if (gameBackgroundTextureId_) {
+                drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, gameBackgroundTextureId_);
+            }
+            drawButton(-32.0f, -8.0f, 18.0f, 18.0f, 0.1f, 0.6f, 1.0f, true, "endless");
+            drawButton(0, -8.0f, 18.0f, 18.0f, 0.7f, 0.2f, 1.0f, false, "challenge");
+            drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.2f, 0.9f, 0.4f, false, "more");
+
+            drawButton(32.0f, 12.0f, 16.0f, 5.0f, 0.9f, 0.6f, 0.1f, true, "store_btn");
+            drawButton(-32.0f, 12.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn");
         }
-        drawButton(-32.0f, -8.0f, 18.0f, 18.0f, 0.1f, 0.6f, 1.0f, true, "endless");
-        drawButton(0, -8.0f, 18.0f, 18.0f, 0.7f, 0.2f, 1.0f, false, "challenge");
-        drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.2f, 0.9f, 0.4f, false, "more");
     }
-    else if (renderState == GameState::PLAYING) {
+    else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER) {
         const auto& snake = game_.getSnake();
-        static Vector2f lastCamPos = {60.0f, 40.0f};
+        static Vector2f lastCamPos = {90.0f, 60.0f};
+
         if (!snake.empty()) lastCamPos = snake[0];
         float camX = lastCamPos.x, camY = lastCamPos.y;
 
@@ -428,7 +556,6 @@ void Renderer::render() {
         drawShape(-0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f);
         drawShape(w + 0.2f - camX, h/2.0f - camY, 0.4f, h + 0.8f, 1.0f, 0.1f, 0.1f, 1.0f);
 
-        // --- 核心：渲染药水道具 ---
         for (const auto& pu : game_.getPowerUps()) {
             GLuint tex = 0;
             if (pu.type == PowerUpType::SPEED) tex = speedTextureId_;
@@ -436,14 +563,12 @@ void Renderer::render() {
             else if (pu.type == PowerUpType::MAGNET) tex = magnetTextureId_;
 
             if (tex) {
-                // 道具绘制得比普通食物稍微大一点，并给予白色底光衬托
                 drawShape(pu.pos.x - camX, pu.pos.y - camY, 2.0f, 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex);
             } else {
                 drawShape(pu.pos.x - camX, pu.pos.y - camY, 1.8f, 1.8f, 1.0f, 0.5f, 0.0f, 1.0f, true);
             }
         }
 
-        // --- 渲染食物 ---
         for (const auto& food : game_.getFoods()) {
             if (food.isDropped) {
                 drawShape(food.pos.x - camX, food.pos.y - camY, 0.8f, 0.8f, 0.0f, 1.0f, 1.0f, 1.0f, true);
@@ -462,14 +587,37 @@ void Renderer::render() {
         }
 
         float scaleFactor = 1.0f + std::min(game_.getScore() * 0.02f, 2.0f);
+        int equippedSkin = getEquippedSkin();
 
-        // --- 核心：渲染蛇身与护盾光圈 ---
         for (size_t i = 0; i < snake.size(); ++i) {
             float intensity = 1.0f - (static_cast<float>(i) / snake.size() * 0.5f);
             float curSize = (i==0?1.5f:1.1f) * scaleFactor;
-            drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, 0.0f, 1.0f*intensity, 1.0f*intensity, 1.0f, true);
 
-            // 如果蛇头并且拥有护盾，在周围画一个透亮的青色保护圈
+            if (equippedSkin <= 7) {
+                float r = 1.f, g = 1.f, b = 1.f;
+                switch(equippedSkin) {
+                    case 0: r=0.0f; g=1.0f; b=1.0f; break;
+                    case 1: r=1.0f; g=0.2f; b=0.2f; break;
+                    case 2: r=0.2f; g=1.0f; b=0.2f; break;
+                    case 3: r=1.0f; g=0.9f; b=0.2f; break;
+                    case 4: r=0.7f; g=0.2f; b=1.0f; break;
+                    case 5: r=1.0f; g=0.4f; b=0.8f; break;
+                    case 6: r=1.0f; g=0.6f; b=0.0f; break;
+                    case 7: r=0.6f; g=0.4f; b=0.2f; break;
+                }
+                drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, r*intensity, g*intensity, b*intensity, 1.0f, true);
+            } else {
+                GLuint tex = skinTex_[equippedSkin];
+                float angle = 0.0f;
+                if (i == 0) {
+                    angle = game_.getRotation();
+                } else {
+                    Vector2f dir = snake[i-1] - snake[i];
+                    angle = std::atan2(dir.y, dir.x);
+                }
+                drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex, false, false, angle);
+            }
+
             if (i == 0 && game_.hasShield()) {
                 drawShape(snake[i].x - camX, snake[i].y - camY, curSize + 1.2f, curSize + 1.2f, 0.2f, 0.9f, 1.0f, 0.5f, true);
             }
@@ -490,7 +638,7 @@ void Renderer::render() {
         }
     }
 
-    if (currentState != GameState::PAUSED && currentState != GameState::GAME_OVER) {
+    if (currentState != GameState::PAUSED && currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY && currentState != GameState::GAME_OVER) {
         float gearX = worldHalfWidth - 4.0f;
         float gearY = kProjectionHalfHeight - 4.0f;
         drawShape(gearX, gearY, 3.5f, 3.5f, 0.8f, 0.8f, 0.8f, 0.8f, false, 0.0f, 0, true);
@@ -528,11 +676,149 @@ void Renderer::render() {
             drawButton(0, -9.5f, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
         }
     }
+    else if (currentState == GameState::STORE) {
+        int currentCoins = getCoins();
+        if (currentCoins != lastCoins_) {
+            lastCoins_ = currentCoins;
+            if (dynamicCoinText_.id != 0) glDeleteTextures(1, &dynamicCoinText_.id);
+            dynamicCoinText_ = createTextTexture("金币: " + std::to_string(currentCoins), 35);
+        }
+
+        // --- 核心修改：傳入 1.01f 開啟純色模式，關閉邊緣發光 ---
+        drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+
+        int cols = 5;
+        float boxW = 11.5f;
+        float boxH = 14.5f;
+        float startX = -24.0f;
+        float spacingX = 13.0f;
+        float startY = 4.0f;
+        float spacingY = 16.5f;
+
+        for (int i = 8; i <= 19; i++) {
+            int index = i - 8;
+            int col = index % cols;
+            int row = index / cols;
+            float px = startX + col * spacingX;
+            float py = startY - row * spacingY + storeScrollY_;
+
+            if (py > 25.0f || py < -25.0f) continue;
+
+            // 白色底框也使用 1.01f 純色模式
+            drawShape(px, py, boxW + 0.4f, boxH + 0.4f, 0.8f, 0.8f, 0.8f, 1.0f, false, 0.2f);
+            drawShape(px, py, boxW, boxH, 1.0f, 1.0f, 1.0f, 1.01f, false, 0.2f);
+
+            drawShape(px, py + 3.0f, 5.0f, 5.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, skinTex_[i]);
+
+            std::string nameKey = "skin_" + std::to_string(i);
+            auto& dt = textTextures_[nameKey];
+            drawShape(px, py - 0.9f, 5.5f, 5.5f * (dt.height/dt.width), 0.2f, 0.2f, 0.2f, 1.0f, false, 0.0f, dt.id);
+
+            if (isSkinOwned(i)) {
+                drawButton(px, py - 4.5f, 8.0f, 3.0f, 0.3f, 0.8f, 0.3f, false, "owned");
+            } else {
+                int price = 0;
+                if (i==8) price=500; else if (i==9) price=1000; else if (i>=10&&i<=12) price=2000;
+                else if (i>=13&&i<=15) price=3000; else if (i==16) price=5000; else if (i==17) price=6000;
+                else if (i==18) price=8000; else if (i==19) price=10000;
+
+                std::string priceLabel = "price_" + std::to_string(price);
+                auto& pTex = textTextures_[priceLabel];
+                drawShape(px, py - 2.5f, 4.5f, 4.5f * (pTex.height/pTex.width), 0.9f, 0.2f, 0.2f, 1.0f, false, 0.0f, pTex.id);
+                drawButton(px, py - 5.0f, 8.0f, 2.5f, 0.9f, 0.6f, 0.1f, true, "buy");
+            }
+        }
+
+        // --- 核心修改：頂部遮罩使用 1.01f 純色模式，100% 擋住滑上去的卡片 ---
+        drawShape(0, 22.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+
+        auto& titleTex = textTextures_["store_title"];
+        drawShape(0.3f, 15.7f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
+        drawShape(0.0f, 16.0f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 1.0f, 0.8f, 0.2f, 1.0f, false, 0.0f, titleTex.id);
+
+        if (dynamicCoinText_.id) {
+            float tw = 12.0f;
+            float th = tw * (dynamicCoinText_.height / dynamicCoinText_.width);
+            drawShape(-24.0f, 14.5f, tw, th, 0.9f, 0.6f, 0.1f, 1.0f, false, 0.0f, dynamicCoinText_.id);
+        }
+
+        drawButton(26.0f, 14.5f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
+    }
+    else if (currentState == GameState::SKIN_INVENTORY) {
+        // --- 核心修改：傳入 1.01f 開啟純色模式，關閉邊緣發光 ---
+        drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+
+        int equipped = getEquippedSkin();
+
+        std::vector<int> ownedSkins;
+        for (int i = 0; i <= 19; ++i) {
+            if (isSkinOwned(i)) ownedSkins.push_back(i);
+        }
+
+        int cols = 5;
+        float boxW = 9.5f;
+        float boxH = 11.5f;
+        float startX = -22.0f;
+        float spacingX = 11.0f;
+        float startY = 8.0f;
+        float spacingY = 13.5f;
+
+        for (size_t i = 0; i < ownedSkins.size(); ++i) {
+            int skinId = ownedSkins[i];
+            int row = i / cols;
+            int col = i % cols;
+
+            float px = startX + col * spacingX;
+            float py = startY - row * spacingY + inventoryScrollY_;
+
+            if (py > 25.0f || py < -25.0f) continue;
+
+            // 白色底框也使用 1.01f 純色模式
+            drawShape(px, py, boxW + 0.4f, boxH + 0.4f, 0.8f, 0.8f, 0.8f, 1.0f, false, 0.2f);
+            drawShape(px, py, boxW, boxH, 1.0f, 1.0f, 1.0f, 1.01f, false, 0.2f);
+
+            if (skinId >= 8) {
+                drawShape(px, py + 2.5f, 4.5f, 4.5f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, skinTex_[skinId]);
+            } else {
+                float r = 1.f, g = 1.f, b = 1.f;
+                switch(skinId) {
+                    case 0: r=0.0f; g=1.0f; b=1.0f; break;
+                    case 1: r=1.0f; g=0.2f; b=0.2f; break;
+                    case 2: r=0.2f; g=1.0f; b=0.2f; break;
+                    case 3: r=1.0f; g=0.9f; b=0.2f; break;
+                    case 4: r=0.7f; g=0.2f; b=1.0f; break;
+                    case 5: r=1.0f; g=0.4f; b=0.8f; break;
+                    case 6: r=1.0f; g=0.6f; b=0.0f; break;
+                    case 7: r=0.6f; g=0.4f; b=0.2f; break;
+                }
+                drawShape(px, py + 2.5f, 4.5f, 4.5f, r, g, b, 1.0f, true);
+            }
+
+            std::string nameKey = "skin_" + std::to_string(skinId);
+            auto& dt = textTextures_[nameKey];
+            drawShape(px, py - 0.9f, 4.3f, 4.3f * (dt.height/dt.width), 0.2f, 0.2f, 0.2f, 1.0f, false, 0.0f, dt.id);
+
+            if (equipped == skinId) {
+                drawButton(px, py - 3.5f, 7.5f, 2.5f, 0.3f, 0.8f, 0.3f, false, "equipped");
+            } else {
+                drawButton(px, py - 3.5f, 7.5f, 2.5f, 0.2f, 0.6f, 1.0f, true, "equip");
+            }
+        }
+
+        // --- 核心修改：頂部遮罩使用 1.01f 純色模式，100% 擋住滑上去的卡片 ---
+        drawShape(0, 24.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+
+        auto& titleTex = textTextures_["inventory_title"];
+        drawShape(0.3f, 17.3f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
+        drawShape(0.0f, 17.5f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 1.0f, 0.8f, 0.2f, 1.0f, false, 0.0f, titleTex.id);
+
+        drawButton(26.0f, 16.0f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
+    }
 
     eglSwapBuffers(display_, surface_);
 }
 
-void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a, bool isCircle, float radius, GLuint textureId, bool isGear, bool isLightning) {
+void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a, bool isCircle, float radius, GLuint textureId, bool isGear, bool isLightning, float rotation) {
     if (!shader_ || models_.empty()) return;
     glUniform3f(glGetUniformLocation(shader_->getProgram(), "uOffset"), x, y, 0.0f);
     glUniform2f(glGetUniformLocation(shader_->getProgram(), "uScale"), sx, sy);
@@ -541,6 +827,7 @@ void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g,
     glUniform1i(glGetUniformLocation(shader_->getProgram(), "uIsGear"), isGear ? 1 : 0);
     glUniform1i(glGetUniformLocation(shader_->getProgram(), "uIsLightning"), isLightning ? 1 : 0);
     glUniform1f(glGetUniformLocation(shader_->getProgram(), "uRadius"), radius);
+    glUniform1f(glGetUniformLocation(shader_->getProgram(), "uRotation"), rotation);
     glUniform1i(glGetUniformLocation(shader_->getProgram(), "uUseTexture"), textureId > 0 ? 1 : 0);
 
     if (textureId > 0) {
@@ -580,7 +867,7 @@ void Renderer::handleInput() {
                 previousState_ = state;
                 game_.setState(GameState::PAUSED);
                 playSfx(2);
-            } else if (state == GameState::PAUSED) {
+            } else if (state == GameState::PAUSED || state == GameState::STORE || state == GameState::SKIN_INVENTORY) {
                 game_.setState(previousState_);
                 playSfx(2);
             }
@@ -602,7 +889,15 @@ void Renderer::handleInput() {
             float nx = (px / (float)width_ * 2.0f - 1.0f) * aspect * kProjectionHalfHeight;
             float ny = (1.0f - py / (float)height_ * 2.0f) * kProjectionHalfHeight;
 
-            if (game_.getState() != GameState::PAUSED && game_.getState() != GameState::GAME_OVER) {
+            if (game_.getState() == GameState::STORE || game_.getState() == GameState::SKIN_INVENTORY) {
+                initialTouchX_ = nx;
+                initialTouchY_ = ny;
+                lastTouchY_ = ny;
+                isDraggingUI_ = false;
+                continue;
+            }
+
+            if (game_.getState() != GameState::PAUSED && game_.getState() != GameState::STORE && game_.getState() != GameState::SKIN_INVENTORY && game_.getState() != GameState::GAME_OVER) {
                 float gearX = (kProjectionHalfHeight * aspect) - 4.0f;
                 float gearY = kProjectionHalfHeight - 4.0f;
                 if (abs(nx - gearX) < 3.0f && abs(ny - gearY) < 3.0f) {
@@ -622,6 +917,18 @@ void Renderer::handleInput() {
                 if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
                 else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
                 else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
+                else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
+                    previousState_ = game_.getState();
+                    game_.setState(GameState::STORE);
+                    storeScrollY_ = 0.0f;
+                    playSfx(2);
+                }
+                else if (abs(nx + 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
+                    previousState_ = game_.getState();
+                    game_.setState(GameState::SKIN_INVENTORY);
+                    inventoryScrollY_ = 0.0f;
+                    playSfx(2);
+                }
             } else if (game_.getState() == GameState::PLAYING) {
                 if (px < (float)width_ * 0.5f && joystickPointerId_ == -1) joystickPointerId_ = pointer.id;
                 else if (px >= (float)width_ * 0.5f && boostPointerId_ == -1) boostPointerId_ = pointer.id;
@@ -640,24 +947,104 @@ void Renderer::handleInput() {
                         else if (abs(ny - (-9.5f)) < 1.8f) { playSfx(2); pendingExitDialog_.store(true); }
                     }
                 }
-            } else if (game_.getState() == GameState::GAME_OVER) {
-                requestRestart();
             }
         } else if (actionMasked == AMOTION_EVENT_ACTION_MOVE) {
             for (int p = 0; p < motionEvent.pointerCount; p++) {
                 auto &pointer = motionEvent.pointers[p];
-                if (pointer.id == joystickPointerId_) {
-                    float dx = GameActivityPointerAxes_getX(&pointer) - joyPixelX_, dy = GameActivityPointerAxes_getY(&pointer) - joyPixelY_;
-                    float dist = std::sqrt(dx*dx + dy*dy);
+                float px = GameActivityPointerAxes_getX(&pointer);
+                float py = GameActivityPointerAxes_getY(&pointer);
+                float aspect = (float)width_ / height_;
+                float nx = (px / (float)width_ * 2.0f - 1.0f) * aspect * kProjectionHalfHeight;
+                float ny = (1.0f - py / (float)height_ * 2.0f) * kProjectionHalfHeight;
+
+                if (game_.getState() == GameState::STORE || game_.getState() == GameState::SKIN_INVENTORY) {
+                    float dy = ny - lastTouchY_;
+                    lastTouchY_ = ny;
+                    if (std::abs(ny - initialTouchY_) > 1.0f) isDraggingUI_ = true;
+
+                    if (game_.getState() == GameState::STORE) {
+                        storeScrollY_ += dy;
+                        if (storeScrollY_ < 0.0f) storeScrollY_ = 0.0f;
+                        if (storeScrollY_ > 35.0f) storeScrollY_ = 35.0f;
+                    } else {
+                        inventoryScrollY_ += dy;
+                        if (inventoryScrollY_ < 0.0f) inventoryScrollY_ = 0.0f;
+                        if (inventoryScrollY_ > 40.0f) inventoryScrollY_ = 40.0f;
+                    }
+                }
+
+                if (pointer.id == joystickPointerId_ && game_.getState() == GameState::PLAYING) {
+                    float dx = px - joyPixelX_, dy_joy = py - joyPixelY_;
+                    float dist = std::sqrt(dx*dx + dy_joy*dy_joy);
                     if (dist > 5.0f) {
-                        game_.setRotation(std::atan2(-dy, dx));
+                        game_.setRotation(std::atan2(-dy_joy, dx));
                         float maxD = 180.0f; float clampD = std::min(dist, maxD);
-                        joystickTiltX_ = (dx/dist)*(clampD/maxD); joystickTiltY_ = -(dy/dist)*(clampD/maxD);
+                        joystickTiltX_ = (dx/dist)*(clampD/maxD); joystickTiltY_ = -(dy_joy/dist)*(clampD/maxD);
                     }
                 }
             }
         } else if (actionMasked == AMOTION_EVENT_ACTION_UP || actionMasked == AMOTION_EVENT_ACTION_POINTER_UP || actionMasked == AMOTION_EVENT_ACTION_CANCEL) {
             int32_t id = motionEvent.pointers[pointerIndex].id;
+
+            auto &pointer = motionEvent.pointers[pointerIndex];
+            float px = GameActivityPointerAxes_getX(&pointer);
+            float py = GameActivityPointerAxes_getY(&pointer);
+            float aspect = (float)width_ / height_;
+            float nx = (px / (float)width_ * 2.0f - 1.0f) * aspect * kProjectionHalfHeight;
+            float ny = (1.0f - py / (float)height_ * 2.0f) * kProjectionHalfHeight;
+
+            if (game_.getState() == GameState::STORE) {
+                if (!isDraggingUI_) {
+                    float startX = -24.0f;
+                    float spacingX = 13.0f;
+                    float startY = 4.0f;
+                    float spacingY = 16.5f;
+
+                    for (int j = 8; j <= 19; j++) {
+                        int index = j - 8;
+                        int col = index % 5;
+                        int row = index / 5;
+                        float bx = startX + col * spacingX;
+                        float by = startY - row * spacingY + storeScrollY_;
+                        float btnY = by - 5.0f;
+
+                        if (ny < 12.0f && abs(nx - bx) < 5.0f && abs(ny - btnY) < 2.5f) {
+                            int price = 0;
+                            if (j==8) price=500; else if (j==9) price=1000; else if (j>=10&&j<=12) price=2000;
+                            else if (j>=13&&j<=15) price=3000; else if (j==16) price=5000; else if (j==17) price=6000;
+                            else if (j==18) price=8000; else if (j==19) price=10000;
+
+                            buySkin(j, price);
+                        }
+                    }
+                    if (abs(nx - 26.0f) < 7.0f && abs(ny - 14.5f) < 3.0f) { game_.setState(previousState_); playSfx(2); }
+                }
+            } else if (game_.getState() == GameState::SKIN_INVENTORY) {
+                if (!isDraggingUI_) {
+                    std::vector<int> ownedSkins;
+                    for (int j = 0; j <= 19; ++j) if (isSkinOwned(j)) ownedSkins.push_back(j);
+
+                    float startX = -22.0f;
+                    float spacingX = 11.0f;
+                    float startY = 8.0f;
+                    float spacingY = 13.5f;
+
+                    for (size_t j = 0; j < ownedSkins.size(); ++j) {
+                        int row = j / 5;
+                        int col = j % 5;
+                        float bx = startX + col * spacingX;
+                        float by = startY - row * spacingY + inventoryScrollY_;
+                        float btnY = by - 3.5f;
+
+                        if (ny < 14.0f && abs(nx - bx) < 4.5f && abs(ny - btnY) < 2.0f) {
+                            equipSkin(ownedSkins[j]);
+                            playSfx(2);
+                        }
+                    }
+                    if (abs(nx - 26.0f) < 7.0f && abs(ny - 16.0f) < 3.0f) { game_.setState(previousState_); playSfx(2); }
+                }
+            }
+
             if (id == joystickPointerId_) { joystickPointerId_ = -1; joystickTiltX_ = 0; joystickTiltY_ = 0; }
             else if (id == boostPointerId_) boostPointerId_ = -1;
         }
@@ -678,8 +1065,12 @@ void Renderer::triggerGameOver() {
     }
     jobject activityObj = app_->activity->javaGameActivity;
     jclass clazz = env->GetObjectClass(activityObj);
-    jmethodID method = env->GetMethodID(clazz, "showGameOverDialog", "(I)V");
-    if (method) env->CallVoidMethod(activityObj, method, (jint)game_.getScore());
+
+    int score = game_.getScore();
+    int earnedCoins = score * 10;
+
+    jmethodID method = env->GetMethodID(clazz, "showGameOverDialog", "(II)V");
+    if (method) env->CallVoidMethod(activityObj, method, (jint)score, (jint)earnedCoins);
     if (env->ExceptionCheck()) env->ExceptionClear();
     if (needsDetach) app_->activity->vm->DetachCurrentThread();
 }
