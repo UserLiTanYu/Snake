@@ -6,6 +6,40 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+namespace {
+constexpr int kNumAiSnakes = 5;
+constexpr int kMaxAiSnakes = 12;
+constexpr float kAiSpawnIntervalSec = 3.0f;
+constexpr int kAiMinSegments = 3;
+constexpr int kAiMaxSegments = 22;
+constexpr float kMinSpawnSeparation = 14.0f;
+
+float wrapAngle(float a) {
+    while (a > M_PI) a -= static_cast<float>(2.0 * M_PI);
+    while (a < -M_PI) a += static_cast<float>(2.0 * M_PI);
+    return a;
+}
+
+float lerpAngle(float from, float to, float t) {
+    return from + wrapAngle(to - from) * t;
+}
+}
+
+void SnakeGame::followSegments(std::vector<Vector2f>& segments, float segmentDistance) {
+    for (size_t i = 1; i < segments.size(); ++i) {
+        Vector2f& current = segments[i];
+        Vector2f& prev = segments[i - 1];
+        float dx = current.x - prev.x;
+        float dy = current.y - prev.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (dist > segmentDistance) {
+            float ratio = segmentDistance / dist;
+            current.x = prev.x + dx * ratio;
+            current.y = prev.y + dy * ratio;
+        }
+    }
+}
+
 SnakeGame::SnakeGame(float worldWidth, float worldHeight)
         : worldWidth_(worldWidth), worldHeight_(worldHeight), rng_(std::chrono::system_clock::now().time_since_epoch().count()) {
     reset();
@@ -14,6 +48,7 @@ SnakeGame::SnakeGame(float worldWidth, float worldHeight)
 void SnakeGame::reset() {
     snake_.clear();
     pathHistory_.clear();
+    aiSnakes_.clear();
 
     Vector2f head = {worldWidth_ / 2.0f, worldHeight_ / 2.0f};
     snake_.push_back(head);
@@ -42,13 +77,82 @@ void SnakeGame::reset() {
     foods_.clear();
     for (int i = 0; i < 150; ++i) spawnFood();
     for (int i = 0; i < 3; ++i) spawnPowerUp();
+
+    if (endlessArenaMode_) {
+        spawnAISnakes();
+        aiSpawnTimer_ = kAiSpawnIntervalSec;
+    } else {
+        aiSpawnTimer_ = 0.0f;
+    }
+}
+
+void SnakeGame::spawnAISnakes() {
+    aiSnakes_.clear();
+    for (int i = 0; i < kNumAiSnakes; ++i) {
+        spawnOneAISnake();
+    }
+}
+
+void SnakeGame::spawnOneAISnake() {
+    if (snake_.empty()) return;
+    if (aiSnakes_.size() >= static_cast<size_t>(kMaxAiSnakes)) return;
+
+    std::uniform_real_distribution<float> distX(8.0f, worldWidth_ - 8.0f);
+    std::uniform_real_distribution<float> distY(8.0f, worldHeight_ - 8.0f);
+
+    auto tooCloseToAnything = [&](Vector2f p) -> bool {
+        if ((p - snake_.front()).length() < kMinSpawnSeparation) return true;
+        for (const auto& ai : aiSnakes_) {
+            if (!ai.segments.empty() && (p - ai.segments.front()).length() < kMinSpawnSeparation * 0.85f) return true;
+        }
+        return false;
+    };
+
+    AISnake ai;
+    const int slot = static_cast<int>(aiSnakes_.size());
+    ai.paletteId = slot % 6;
+    ai.score = 0;
+    ai.pendingGrowth = 0.0f;
+    ai.wanderTimer = 0.0f;
+
+    Vector2f pos{};
+    bool ok = false;
+    for (int attempt = 0; attempt < 80; ++attempt) {
+        pos = {distX(rng_), distY(rng_)};
+        if (!tooCloseToAnything(pos)) {
+            ok = true;
+            break;
+        }
+    }
+    if (!ok) {
+        pos = {15.0f + static_cast<float>(slot % 9) * 11.0f, 12.0f + static_cast<float>(slot % 6) * 9.0f};
+    }
+
+    std::uniform_int_distribution<int> segCountDist(kAiMinSegments, kAiMaxSegments);
+    const int nSeg = segCountDist(rng_);
+    ai.segments.push_back(pos);
+    for (int j = 1; j < nSeg; ++j) {
+        ai.segments.push_back({pos.x, pos.y - j * 0.5f});
+    }
+    std::uniform_real_distribution<float> ang(0.0f, static_cast<float>(2.0 * M_PI));
+    ai.rotation = ang(rng_);
+    aiSnakes_.push_back(std::move(ai));
+}
+
+void SnakeGame::tickPeriodicAISpawn(float deltaTime) {
+    if (!endlessArenaMode_ || state_ != GameState::PLAYING) return;
+    aiSpawnTimer_ -= deltaTime;
+    if (aiSpawnTimer_ > 0.0f) return;
+    aiSpawnTimer_ = kAiSpawnIntervalSec;
+    if (aiSnakes_.size() < static_cast<size_t>(kMaxAiSnakes)) {
+        spawnOneAISnake();
+    }
 }
 
 void SnakeGame::spawnFood() {
     std::uniform_real_distribution<float> distX(1.0f, worldWidth_ - 1.0f);
     std::uniform_real_distribution<float> distY(1.0f, worldHeight_ - 1.0f);
     std::uniform_int_distribution<int> distColor(0, 5);
-    // 默认食物价值为 1
     foods_.push_back({{distX(rng_), distY(rng_)}, false, distColor(rng_), 1});
 }
 
@@ -67,6 +171,18 @@ void SnakeGame::setBoosting(bool boosting) {
     isBoosting_ = boosting;
 }
 
+std::vector<RankEntry> SnakeGame::getLengthLeaderboard() const {
+    std::vector<RankEntry> rows;
+    rows.push_back({static_cast<int>(snake_.size()), true, -1});
+    for (size_t i = 0; i < aiSnakes_.size(); ++i) {
+        rows.push_back({static_cast<int>(aiSnakes_[i].segments.size()), false, static_cast<int>(i)});
+    }
+    std::sort(rows.begin(), rows.end(), [](const RankEntry& a, const RankEntry& b) {
+        return a.length > b.length;
+    });
+    return rows;
+}
+
 void SnakeGame::update(float deltaTime) {
     if (state_ != GameState::PLAYING) return;
 
@@ -75,6 +191,7 @@ void SnakeGame::update(float deltaTime) {
     if (magnetTimer_ > 0.0f) magnetTimer_ = std::max(0.0f, magnetTimer_ - deltaTime);
 
     move(deltaTime);
+    if (state_ == GameState::GAME_OVER) return;
 
     float scaleBase = 1.0f + std::min(score_ * 0.02f, 2.0f);
     float eatRadius = 1.0f * scaleBase;
@@ -86,7 +203,7 @@ void SnakeGame::update(float deltaTime) {
         for (auto& food : foods_) {
             float dx = head.x - food.pos.x;
             float dy = head.y - food.pos.y;
-            float dist = std::sqrt(dx*dx + dy*dy);
+            float dist = std::sqrt(dx * dx + dy * dy);
             if (dist > 0.1f && dist < magnetRadius) {
                 food.pos.x += (dx / dist) * pullSpeed * deltaTime;
                 food.pos.y += (dy / dist) * pullSpeed * deltaTime;
@@ -99,15 +216,13 @@ void SnakeGame::update(float deltaTime) {
         float dx = head.x - it->pos.x;
         float dy = head.y - it->pos.y;
 
-        // 核心修改：动态适应大食物的吃取半径
         float foodScale = 1.0f;
         if (it->value > 1) {
             foodScale = 1.0f + std::log10(static_cast<float>(it->value)) * 0.8f;
         }
         float currentFoodRadius = 0.4f * foodScale;
 
-        if (std::sqrt(dx*dx + dy*dy) < eatRadius + currentFoodRadius) {
-            // 完美还原失去的质量
+        if (std::sqrt(dx * dx + dy * dy) < eatRadius + currentFoodRadius) {
             score_ += it->value;
             float growthAmount = (float)it->value / scaleBase;
             pendingGrowth_ += growthAmount;
@@ -128,13 +243,25 @@ void SnakeGame::update(float deltaTime) {
     while (puIt != powerUps_.end()) {
         float dx = head.x - puIt->pos.x;
         float dy = head.y - puIt->pos.y;
-        if (std::sqrt(dx*dx + dy*dy) < eatRadius * 1.5f) {
+        if (std::sqrt(dx * dx + dy * dy) < eatRadius * 1.5f) {
             if (puIt->type == PowerUpType::SPEED) speedTimer_ = 3.0f;
             else if (puIt->type == PowerUpType::SHIELD) shieldTimer_ = 5.0f;
             else if (puIt->type == PowerUpType::MAGNET) magnetTimer_ = 3.0f;
             puIt = powerUps_.erase(puIt);
         } else {
             ++puIt;
+        }
+    }
+
+    if (endlessArenaMode_) {
+        tickPeriodicAISpawn(deltaTime);
+        if (!aiSnakes_.empty()) {
+            moveAISnakes(deltaTime);
+            aiEatFood();
+            checkAIHeadToHeadCollisions();
+            checkAIvsPlayerTail();
+            checkPlayerVsAI();
+            if (state_ == GameState::GAME_OVER) return;
         }
     }
 
@@ -145,6 +272,239 @@ void SnakeGame::update(float deltaTime) {
     while (powerUps_.size() < 3) spawnPowerUp();
     if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
         spawnPowerUp();
+    }
+}
+
+void SnakeGame::moveAISnakes(float deltaTime) {
+    Vector2f worldCenter = {worldWidth_ * 0.5f, worldHeight_ * 0.5f};
+
+    for (auto& ai : aiSnakes_) {
+        if (ai.segments.empty()) continue;
+
+        float scaleBase = 1.0f + std::min(ai.score * 0.02f, 2.0f);
+        float speed = baseSpeed_ * 0.9f;
+        Vector2f aHead = ai.segments.front();
+
+        ai.wanderTimer -= deltaTime;
+        if (ai.wanderTimer <= 0.0f) {
+            std::uniform_real_distribution<float> d(-0.35f, 0.35f);
+            ai.rotation = wrapAngle(ai.rotation + d(rng_));
+            std::uniform_real_distribution<float> wt(0.4f, 1.2f);
+            ai.wanderTimer = wt(rng_);
+        }
+
+        Food* nearest = nullptr;
+        float bestD = 1e9f;
+        for (auto& food : foods_) {
+            float dx = food.pos.x - aHead.x;
+            float dy = food.pos.y - aHead.y;
+            float d = std::sqrt(dx * dx + dy * dy);
+            if (d < bestD) {
+                bestD = d;
+                nearest = &food;
+            }
+        }
+
+        float desired = ai.rotation;
+        if (nearest) {
+            desired = std::atan2(nearest->pos.y - aHead.y, nearest->pos.x - aHead.x);
+        }
+
+        float margin = 6.0f;
+        if (aHead.x < margin || aHead.x > worldWidth_ - margin || aHead.y < margin || aHead.y > worldHeight_ - margin) {
+            Vector2f toC = worldCenter - aHead;
+            float angCenter = std::atan2(toC.y, toC.x);
+            desired = lerpAngle(desired, angCenter, 0.65f);
+        }
+
+        ai.rotation = lerpAngle(ai.rotation, desired, std::min(1.0f, 3.2f * deltaTime));
+
+        Vector2f dir = {std::cos(ai.rotation), std::sin(ai.rotation)};
+        Vector2f nextHead = aHead + dir * speed * deltaTime;
+
+        if (nextHead.x < 0.5f) nextHead.x = 0.5f;
+        else if (nextHead.x > worldWidth_ - 0.5f) nextHead.x = worldWidth_ - 0.5f;
+        if (nextHead.y < 0.5f) nextHead.y = 0.5f;
+        else if (nextHead.y > worldHeight_ - 0.5f) nextHead.y = worldHeight_ - 0.5f;
+
+        ai.segments[0] = nextHead;
+        float currentSegDist = 0.5f * scaleBase;
+        followSegments(ai.segments, currentSegDist);
+    }
+}
+
+void SnakeGame::aiEatFood() {
+    for (auto& ai : aiSnakes_) {
+        if (ai.segments.empty()) continue;
+        Vector2f aHead = ai.segments.front();
+        float scaleBase = 1.0f + std::min(ai.score * 0.02f, 2.0f);
+        float eatRadius = 0.95f * scaleBase;
+
+        auto it = foods_.begin();
+        while (it != foods_.end()) {
+            float foodScale = 1.0f;
+            if (it->value > 1) {
+                foodScale = 1.0f + std::log10(static_cast<float>(it->value)) * 0.8f;
+            }
+            float currentFoodRadius = 0.4f * foodScale;
+            float dx = aHead.x - it->pos.x;
+            float dy = aHead.y - it->pos.y;
+            if (std::sqrt(dx * dx + dy * dy) < eatRadius + currentFoodRadius) {
+                ai.score += it->value;
+                float growthAmount = (float)it->value / scaleBase;
+                ai.pendingGrowth += growthAmount;
+                while (ai.pendingGrowth >= 1.0f) {
+                    ai.segments.push_back(ai.segments.back());
+                    ai.pendingGrowth -= 1.0f;
+                }
+                it = foods_.erase(it);
+                if (foods_.size() < 90) spawnFood();
+            } else {
+                ++it;
+            }
+        }
+    }
+}
+
+void SnakeGame::spawnFoodFromDeadAI(const AISnake& ai) {
+    if (ai.segments.empty()) return;
+    int totalMass = std::max(ai.score, static_cast<int>(ai.segments.size()));
+    const int maxPellets = 40;
+    int num = std::min(maxPellets, std::max(4, static_cast<int>(ai.segments.size()) / 2));
+    if (num > static_cast<int>(ai.segments.size())) num = static_cast<int>(ai.segments.size());
+    if (num < 1) num = 1;
+    int baseVal = totalMass / num;
+    int remainder = totalMass % num;
+    int colorKey = ai.paletteId % 8;
+
+    for (int k = 0; k < num; ++k) {
+        size_t si = 0;
+        if (num == 1) {
+            si = ai.segments.size() / 2;
+        } else {
+            si = static_cast<size_t>((static_cast<int>(ai.segments.size()) - 1) * k / (num - 1));
+        }
+        int v = baseVal + (k < remainder ? 1 : 0);
+        if (v < 1) v = 1;
+        if (foods_.size() < 320) {
+            foods_.push_back({ai.segments[si], true, colorKey, v});
+        }
+    }
+}
+
+void SnakeGame::checkAIHeadToHeadCollisions() {
+    bool removed = true;
+    while (removed) {
+        removed = false;
+        for (size_t i = 0; i < aiSnakes_.size() && !removed; ++i) {
+            for (size_t j = i + 1; j < aiSnakes_.size() && !removed; ++j) {
+                const AISnake& A = aiSnakes_[i];
+                const AISnake& B = aiSnakes_[j];
+                if (A.segments.empty() || B.segments.empty()) continue;
+
+                float dx = A.segments[0].x - B.segments[0].x;
+                float dy = A.segments[0].y - B.segments[0].y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+
+                float sa = 1.0f + std::min(A.score * 0.02f, 2.0f);
+                float sb = 1.0f + std::min(B.score * 0.02f, 2.0f);
+                float ra = 0.45f * sa;
+                float rb = 0.45f * sb;
+                if (dist >= (ra + rb) * 1.15f) continue;
+
+                const int lenA = static_cast<int>(A.segments.size());
+                const int lenB = static_cast<int>(B.segments.size());
+
+                if (lenA < lenB) {
+                    spawnFoodFromDeadAI(aiSnakes_[i]);
+                    aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(i));
+                    removed = true;
+                } else if (lenB < lenA) {
+                    spawnFoodFromDeadAI(aiSnakes_[j]);
+                    aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(j));
+                    removed = true;
+                } else {
+                    spawnFoodFromDeadAI(aiSnakes_[j]);
+                    aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(j));
+                    removed = true;
+                }
+            }
+        }
+    }
+}
+
+void SnakeGame::checkAIvsPlayerTail() {
+    if (snake_.size() < 2) return;
+
+    float pScale = 1.0f + std::min(score_ * 0.02f, 2.0f);
+    for (size_t aiIdx = 0; aiIdx < aiSnakes_.size();) {
+        AISnake& ai = aiSnakes_[aiIdx];
+        if (ai.segments.empty()) {
+            ++aiIdx;
+            continue;
+        }
+        Vector2f aHead = ai.segments.front();
+        float aiScale = 1.0f + std::min(ai.score * 0.02f, 2.0f);
+        float headR = 0.45f * aiScale;
+
+        bool dead = false;
+        for (size_t pi = 1; pi < snake_.size(); ++pi) {
+            float segR = 0.38f * pScale;
+            float dx = aHead.x - snake_[pi].x;
+            float dy = aHead.y - snake_[pi].y;
+            if (std::sqrt(dx * dx + dy * dy) < headR + segR) {
+                dead = true;
+                break;
+            }
+        }
+        if (dead) {
+            spawnFoodFromDeadAI(ai);
+            aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(aiIdx));
+            continue;
+        }
+        ++aiIdx;
+    }
+}
+
+void SnakeGame::checkPlayerVsAI() {
+    if (shieldTimer_ > 0.0f || snake_.empty()) return;
+    Vector2f pHead = snake_.front();
+    float pScale = 1.0f + std::min(score_ * 0.02f, 2.0f);
+    float pRad = 0.42f * pScale;
+    const int plen = static_cast<int>(snake_.size());
+
+    for (size_t aiIdx = 0; aiIdx < aiSnakes_.size();) {
+        const AISnake& ai = aiSnakes_[aiIdx];
+        if (ai.segments.empty()) {
+            ++aiIdx;
+            continue;
+        }
+        float aiScale = 1.0f + std::min(ai.score * 0.02f, 2.0f);
+
+        float dx0 = pHead.x - ai.segments[0].x;
+        float dy0 = pHead.y - ai.segments[0].y;
+        float headCombined = pRad + 0.45f * aiScale * 1.15f;
+        if (std::sqrt(dx0 * dx0 + dy0 * dy0) < headCombined) {
+            const int alen = static_cast<int>(ai.segments.size());
+            if (plen < alen) {
+                state_ = GameState::GAME_OVER;
+                return;
+            }
+            spawnFoodFromDeadAI(aiSnakes_[aiIdx]);
+            aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(aiIdx));
+            continue;
+        }
+
+        for (size_t i = 1; i < ai.segments.size(); ++i) {
+            float dx = pHead.x - ai.segments[i].x;
+            float dy = pHead.y - ai.segments[i].y;
+            float r = pRad + 0.38f * aiScale;
+            if (std::sqrt(dx * dx + dy * dy) < r) {
+                state_ = GameState::GAME_OVER;
+                return;
+            }
+        }
+        ++aiIdx;
     }
 }
 
@@ -164,21 +524,18 @@ void SnakeGame::move(float deltaTime) {
         while (pendingFoodLoss_ >= 1.0f && score_ > 0) {
             pendingFoodLoss_ -= 1.0f;
 
-            // 核心修改：蛇越大，排泄的单块质量（Value）越高！
             int dropValue = 1 + score_ / 30;
             if (score_ < dropValue) dropValue = score_;
             score_ -= dropValue;
 
             if (foods_.size() < 300 && !snake_.empty()) {
-                // 将 equippedSkin_ 作为食物颜色记录下来，并带上它的价值！
                 foods_.push_back({snake_.back(), true, equippedSkin_, dropValue});
             }
 
-            float scaleBase = 1.0f + std::min(score_ * 0.02f, 2.0f);
-            float lengthLoss = (float)dropValue / scaleBase;
+            float scaleBaseLoss = 1.0f + std::min(score_ * 0.02f, 2.0f);
+            float lengthLoss = (float)dropValue / scaleBaseLoss;
             pendingGrowth_ -= lengthLoss;
 
-            // 扣除掉对应的蛇身长度
             while (pendingGrowth_ < 0.0f && snake_.size() > 5) {
                 snake_.pop_back();
                 pendingGrowth_ += 1.0f;
@@ -209,29 +566,21 @@ void SnakeGame::move(float deltaTime) {
     }
 
     snake_[0] = nextHead;
-    for (size_t i = 1; i < snake_.size(); ++i) {
-        Vector2f& current = snake_[i];
-        Vector2f& prev = snake_[i-1];
-        float dx = current.x - prev.x;
-        float dy = current.y - prev.y;
-        float dist = std::sqrt(dx*dx + dy*dy);
+    followSegments(snake_, currentSegDist);
 
-        if (dist > currentSegDist) {
-            float ratio = currentSegDist / dist;
-            current.x = prev.x + dx * ratio;
-            current.y = prev.y + dy * ratio;
-        }
-    }
-
-    if (shieldTimer_ <= 0.0f) {
+    if (shieldTimer_ <= 0.0f && !endlessArenaMode_) {
         for (size_t i = 10; i < snake_.size(); ++i) {
             float dx = nextHead.x - snake_[i].x;
             float dy = nextHead.y - snake_[i].y;
 
-            if (std::sqrt(dx*dx + dy*dy) < collisionRadius) {
+            if (std::sqrt(dx * dx + dy * dy) < collisionRadius) {
                 state_ = GameState::GAME_OVER;
                 return;
             }
         }
     }
+}
+
+bool SnakeGame::checkCollisionWithSelf() const {
+    return false;
 }

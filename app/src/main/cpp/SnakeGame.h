@@ -44,6 +44,21 @@ struct PowerUp {
     PowerUpType type;
 };
 
+struct AISnake {
+    std::vector<Vector2f> segments;
+    float rotation = 0.0f;
+    int paletteId = 0;
+    int score = 0;
+    float pendingGrowth = 0.0f;
+    float wanderTimer = 0.0f;
+};
+
+struct RankEntry {
+    int length = 0;
+    bool isPlayer = false;
+    int aiIndex = -1;
+};
+
 class SnakeGame {
 public:
     SnakeGame(float worldWidth, float worldHeight);
@@ -54,10 +69,13 @@ public:
     void setBoosting(bool boosting);
 
     void setEquippedSkin(int skinId) { equippedSkin_ = skinId; }
+    void setEndlessArenaMode(bool enabled) { endlessArenaMode_ = enabled; }
+    bool isEndlessArenaMode() const { return endlessArenaMode_; }
 
     void reset();
 
     const std::vector<Vector2f>& getSnake() const { return snake_; }
+    const std::vector<AISnake>& getAISnakes() const { return aiSnakes_; }
     const std::vector<Food>& getFoods() const { return foods_; }
     const std::vector<PowerUp>& getPowerUps() const { return powerUps_; }
     int getScore() const { return score_; }
@@ -69,10 +87,23 @@ public:
     float getWorldWidth() const { return worldWidth_; }
     float getWorldHeight() const { return worldHeight_; }
 
+    std::vector<RankEntry> getLengthLeaderboard() const;
+    int getTotalSnakeCount() const { return 1 + static_cast<int>(aiSnakes_.size()); }
+
 private:
     void spawnFood();
     void spawnPowerUp();
+    void spawnAISnakes();
+    void spawnOneAISnake();
+    void tickPeriodicAISpawn(float deltaTime);
     void move(float deltaTime);
+    void moveAISnakes(float deltaTime);
+    void aiEatFood();
+    void checkAIvsPlayerTail();
+    void checkAIHeadToHeadCollisions();
+    void checkPlayerVsAI();
+    void spawnFoodFromDeadAI(const AISnake& ai);
+    static void followSegments(std::vector<Vector2f>& segments, float segmentDistance);
     bool checkCollisionWithSelf() const;
 
     float worldWidth_;
@@ -85,6 +116,9 @@ private:
 
     std::vector<Food> foods_;
     std::vector<PowerUp> powerUps_;
+    std::vector<AISnake> aiSnakes_;
+    bool endlessArenaMode_ = false;
+    float aiSpawnTimer_ = 0.0f;
 
     int score_;
     GameState state_;

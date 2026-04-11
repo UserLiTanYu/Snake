@@ -135,6 +135,7 @@ Renderer::Renderer(android_app *pApp) :
 
     for(int i=0; i<=19; i++) { skinTex_[i] = 0; }
     dynamicCoinText_.id = 0;
+    endlessSnakeCountTex_.id = 0;
 
     gRenderer = this;
     initRenderer();
@@ -165,6 +166,7 @@ Renderer::Renderer(android_app *pApp) :
 
 Renderer::~Renderer() {
     if (gRenderer == this) gRenderer = nullptr;
+    clearRankPanelCache();
     if (startBackgroundTextureId_) glDeleteTextures(1, &startBackgroundTextureId_);
     if (gameBackgroundTextureId_) glDeleteTextures(1, &gameBackgroundTextureId_);
     if (playingBackgroundTextureId_) glDeleteTextures(1, &playingBackgroundTextureId_);
@@ -175,6 +177,7 @@ Renderer::~Renderer() {
         if(skinTex_[i]) glDeleteTextures(1, &skinTex_[i]);
     }
     if (dynamicCoinText_.id) glDeleteTextures(1, &dynamicCoinText_.id);
+    if (endlessSnakeCountTex_.id) glDeleteTextures(1, &endlessSnakeCountTex_.id);
     for (auto& pair : textTextures_) glDeleteTextures(1, &pair.second.id);
 }
 
@@ -348,6 +351,123 @@ void Renderer::loadTextTextures() {
     textTextures_["skin_17"] = createTextTexture("珍珠贝", 25);
     textTextures_["skin_18"] = createTextTexture("暗星空", 25);
     textTextures_["skin_19"] = createTextTexture("纯金球", 25);
+
+    textTextures_["rank_title"] = createTextTexture("实时长度·前五", 22);
+    textTextures_["rank_fold"] = createTextTexture("点击收起", 18);
+    textTextures_["rank_expand"] = createTextTexture("排行 展开", 20);
+}
+
+namespace {
+void aiPaletteRgb(int paletteId, float& r, float& g, float& b) {
+    switch (paletteId % 6) {
+        case 0: r = 0.25f; g = 0.85f; b = 1.0f; break;
+        case 1: r = 1.0f; g = 0.45f; b = 0.35f; break;
+        case 2: r = 0.45f; g = 1.0f; b = 0.55f; break;
+        case 3: r = 1.0f; g = 0.92f; b = 0.35f; break;
+        case 4: r = 0.78f; g = 0.4f; b = 1.0f; break;
+        default: r = 0.95f; g = 0.5f; b = 1.0f; break;
+    }
+}
+
+bool hitRankingPanel(float nx, float ny, float worldHalfWidth, bool expanded) {
+    const float left = -worldHalfWidth + 0.8f;
+    const float right = left + 14.2f;
+    const float top = 22.0f - 0.6f;
+    const float bottom = expanded ? top - 19.5f : top - 4.2f;
+    return nx > left && nx < right && ny < top && ny > bottom;
+}
+}
+
+void Renderer::releaseRankLineTextures() {
+    for (auto& t : rankLineTextures_) {
+        if (t.id) glDeleteTextures(1, &t.id);
+    }
+    rankLineTextures_.clear();
+}
+
+void Renderer::clearRankPanelCache() {
+    releaseRankLineTextures();
+    rankSignature_.clear();
+    if (endlessSnakeCountTex_.id) {
+        glDeleteTextures(1, &endlessSnakeCountTex_.id);
+        endlessSnakeCountTex_.id = 0;
+    }
+    lastEndlessSnakeTotal_ = -1;
+}
+
+void Renderer::syncRankPanelTextures() {
+    if (!game_.isEndlessArenaMode()) return;
+    auto board = game_.getLengthLeaderboard();
+    constexpr size_t kRankTopN = 5;
+    if (board.size() > kRankTopN) board.resize(kRankTopN);
+    std::vector<int> sig;
+    sig.reserve(board.size() * 3);
+    for (const auto& row : board) {
+        sig.push_back(row.length);
+        sig.push_back(row.isPlayer ? 1 : 0);
+        sig.push_back(row.aiIndex);
+    }
+    if (sig == rankSignature_) return;
+    releaseRankLineTextures();
+    rankSignature_ = std::move(sig);
+    rankLineTextures_.reserve(board.size());
+    for (size_t i = 0; i < board.size(); ++i) {
+        std::string line = std::to_string(i + 1) + ". ";
+        if (board[i].isPlayer) line += "你 ";
+        else line += std::string("电脑") + static_cast<char>('A' + board[i].aiIndex) + " ";
+        line += std::to_string(board[i].length);
+        rankLineTextures_.push_back(createTextTexture(line, 24));
+    }
+}
+
+void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
+    if (!game_.isEndlessArenaMode()) return;
+    syncRankPanelTextures();
+
+    const float left = -worldHalfWidth + 1.0f;
+    const float topY = kProjectionHalfHeight - 2.2f;
+
+    if (!rankingPanelExpanded_) {
+        drawShape(left + 7.2f, topY - 1.9f, 14.4f, 3.4f, 0.15f, 0.75f, 1.0f, 0.22f, false, 0.14f);
+        drawShape(left + 7.2f, topY - 1.9f, 14.0f, 3.0f, 0.05f, 0.07f, 0.14f, 0.9f, false, 0.12f);
+        if (textTextures_.count("rank_expand")) {
+            auto& tex = textTextures_["rank_expand"];
+            float tw = std::min(12.5f, tex.width);
+            float th = tw * (tex.height / tex.width);
+            drawShape(left + 7.2f, topY - 1.9f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
+        }
+        return;
+    }
+
+    const float panelW = 14.5f;
+    const float panelH = 20.0f;
+    const float cx = left + panelW * 0.5f;
+    const float cy = topY - panelH * 0.5f;
+
+    drawShape(cx, cy, panelW + 0.5f, panelH + 0.5f, 0.2f, 0.85f, 1.0f, 0.28f, false, 0.14f);
+    drawShape(cx, cy, panelW, panelH, 0.04f, 0.06f, 0.12f, 0.9f, false, 0.11f);
+
+    if (textTextures_.count("rank_title")) {
+        auto& title = textTextures_["rank_title"];
+        float tw = std::min(11.0f, title.width);
+        float th = tw * (title.height / title.width);
+        drawShape(cx, topY - 3.2f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, title.id);
+    }
+
+    float y = topY - 6.0f;
+    for (const auto& rt : rankLineTextures_) {
+        float lw = std::min(12.5f, rt.width);
+        float lh = lw * (rt.height / rt.width);
+        drawShape(cx, y, lw, lh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, rt.id);
+        y -= lh + 0.65f;
+    }
+
+    if (textTextures_.count("rank_fold")) {
+        auto& hint = textTextures_["rank_fold"];
+        float hw = std::min(10.0f, hint.width);
+        float hh = hw * (hint.height / hint.width);
+        drawShape(cx, cy - panelH * 0.5f + 1.4f, hw, hh, 0.7f, 0.85f, 1.0f, 0.95f, false, 0.0f, hint.id);
+    }
 }
 
 void Renderer::drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& label) {
@@ -538,6 +658,14 @@ void Renderer::render() {
         }
     }
     else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER) {
+        if (!game_.isEndlessArenaMode()) {
+            if (endlessSnakeCountTex_.id) {
+                glDeleteTextures(1, &endlessSnakeCountTex_.id);
+                endlessSnakeCountTex_.id = 0;
+            }
+            lastEndlessSnakeTotal_ = -1;
+        }
+
         const auto& snake = game_.getSnake();
         static Vector2f lastCamPos = {90.0f, 60.0f};
 
@@ -608,12 +736,37 @@ void Renderer::render() {
             }
         }
 
+        for (const auto& ai : game_.getAISnakes()) {
+            if (ai.segments.empty()) continue;
+            float aiScale = 1.0f + std::min(ai.score * 0.02f, 2.0f);
+            float ar = 0.0f, ag = 0.0f, ab = 0.0f;
+            aiPaletteRgb(ai.paletteId, ar, ag, ab);
+            const size_t n = ai.segments.size();
+            for (size_t i = 0; i < n; ++i) {
+                float t = static_cast<float>(i) / static_cast<float>(std::max<size_t>(n - 1, 1));
+                float intensity = 1.0f - t * 0.45f;
+                float taper = 0.62f + 0.38f * (1.0f - t);
+                float curSize = ((i == 0) ? 1.35f : 0.95f) * aiScale * taper;
+                float ox = ai.segments[i].x - camX;
+                float oy = ai.segments[i].y - camY;
+                drawShape(ox, oy, curSize * 1.22f, curSize * 1.22f, ar * 0.2f, ag * 0.2f, ab * 0.25f, 1.08f, true);
+                drawShape(ox, oy, curSize, curSize, ar * intensity, ag * intensity, ab * intensity, 1.0f, true);
+                if (i == 0) {
+                    drawShape(ox, oy, curSize * 1.55f, curSize * 1.55f, ar * 0.45f, ag * 0.45f, ab * 0.5f, 0.35f, true);
+                }
+            }
+        }
+
         float scaleFactor = 1.0f + std::min(game_.getScore() * 0.02f, 2.0f);
         int equippedSkin = getEquippedSkin();
 
         for (size_t i = 0; i < snake.size(); ++i) {
-            float intensity = 1.0f - (static_cast<float>(i) / snake.size() * 0.5f);
-            float curSize = (i==0?1.5f:1.1f) * scaleFactor;
+            float t = static_cast<float>(i) / static_cast<float>(std::max<size_t>(snake.size() - 1, 1));
+            float intensity = 1.0f - t * 0.48f;
+            float taper = 0.68f + 0.32f * (1.0f - t);
+            float curSize = (i == 0 ? 1.58f : 1.05f) * scaleFactor * taper;
+            float px = snake[i].x - camX;
+            float py = snake[i].y - camY;
 
             if (equippedSkin <= 7) {
                 float r = 1.f, g = 1.f, b = 1.f;
@@ -627,7 +780,12 @@ void Renderer::render() {
                     case 6: r=1.0f; g=0.6f; b=0.0f; break;
                     case 7: r=0.6f; g=0.4f; b=0.2f; break;
                 }
-                drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, r*intensity, g*intensity, b*intensity, 1.0f, true);
+                drawShape(px, py, curSize * 1.2f, curSize * 1.2f, r * 0.15f, g * 0.15f, b * 0.18f, 1.06f, true);
+                drawShape(px, py, curSize, curSize, r * intensity, g * intensity, b * intensity, 1.0f, true);
+                if (i == 0) {
+                    drawShape(px, py, curSize * 1.75f, curSize * 1.75f, r * 0.5f, g * 0.55f, b * 0.6f, 0.32f, true);
+                    drawShape(px, py, curSize * 1.15f, curSize * 1.15f, 1.0f, 1.0f, 1.0f, 0.22f, true);
+                }
             } else {
                 GLuint tex = skinTex_[equippedSkin];
                 float angle = 0.0f;
@@ -637,11 +795,15 @@ void Renderer::render() {
                     Vector2f dir = snake[i-1] - snake[i];
                     angle = std::atan2(dir.y, dir.x);
                 }
-                drawShape(snake[i].x - camX, snake[i].y - camY, curSize, curSize, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex, false, false, angle);
+                drawShape(px, py, curSize * 1.18f, curSize * 1.18f, 0.05f, 0.08f, 0.12f, 1.05f, true);
+                drawShape(px, py, curSize, curSize, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex, false, false, angle);
+                if (i == 0) {
+                    drawShape(px, py, curSize * 1.72f, curSize * 1.72f, 0.4f, 0.75f, 1.0f, 0.28f, true);
+                }
             }
 
             if (i == 0 && game_.hasShield()) {
-                drawShape(snake[i].x - camX, snake[i].y - camY, curSize + 1.2f, curSize + 1.2f, 0.2f, 0.9f, 1.0f, 0.5f, true);
+                drawShape(px, py, curSize + 1.2f, curSize + 1.2f, 0.2f, 0.9f, 1.0f, 0.5f, true);
             }
         }
 
@@ -657,6 +819,25 @@ void Renderer::render() {
 
             drawShape(bX, bY, 11.0f, 11.0f, 1.0f, 1.0f, 1.0f, boostAlpha, true);
             drawShape(bX, bY, 6.0f, 6.0f, 1.0f, 0.8f, 0.0f, 1.0f, false, 0.0f, 0, false, true);
+        }
+
+        drawEndlessRankPanel(worldHalfWidth);
+
+        if (game_.isEndlessArenaMode()) {
+            int total = game_.getTotalSnakeCount();
+            if (total != lastEndlessSnakeTotal_) {
+                if (endlessSnakeCountTex_.id) glDeleteTextures(1, &endlessSnakeCountTex_.id);
+                endlessSnakeCountTex_ = createTextTexture("蛇总数: " + std::to_string(total), 26);
+                lastEndlessSnakeTotal_ = total;
+            }
+            if (endlessSnakeCountTex_.id != 0) {
+                float tcx = worldHalfWidth - 13.5f;
+                float tcy = kProjectionHalfHeight - 3.6f;
+                float tw = std::min(15.0f, endlessSnakeCountTex_.width);
+                float th = tw * (endlessSnakeCountTex_.height / endlessSnakeCountTex_.width);
+                drawShape(tcx, tcy, tw + 1.2f, th + 0.9f, 0.03f, 0.06f, 0.12f, 0.82f, false, 0.12f);
+                drawShape(tcx, tcy, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, endlessSnakeCountTex_.id);
+            }
         }
     }
 
@@ -930,9 +1111,28 @@ void Renderer::handleInput() {
                     game_.setState(GameState::MODE_SELECTION);
                 }
             } else if (game_.getState() == GameState::MODE_SELECTION) {
-                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
-                else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
-                else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { playSfx(2); game_.startGame(); }
+                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
+                    endlessArenaActive_ = true;
+                    game_.setEndlessArenaMode(true);
+                    clearRankPanelCache();
+                    playSfx(2);
+                    game_.reset();
+                    game_.startGame();
+                } else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) {
+                    endlessArenaActive_ = false;
+                    game_.setEndlessArenaMode(false);
+                    clearRankPanelCache();
+                    playSfx(2);
+                    game_.reset();
+                    game_.startGame();
+                } else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
+                    endlessArenaActive_ = false;
+                    game_.setEndlessArenaMode(false);
+                    clearRankPanelCache();
+                    playSfx(2);
+                    game_.reset();
+                    game_.startGame();
+                }
                 else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
                     previousState_ = game_.getState();
                     game_.setState(GameState::STORE);
@@ -945,7 +1145,22 @@ void Renderer::handleInput() {
                     inventoryScrollY_ = 0.0f;
                     playSfx(2);
                 }
+            } else if (game_.getState() == GameState::GAME_OVER && game_.isEndlessArenaMode()) {
+                float aspectGo = (float)width_ / height_;
+                float whwGo = kProjectionHalfHeight * aspectGo;
+                if (hitRankingPanel(nx, ny, whwGo, rankingPanelExpanded_)) {
+                    rankingPanelExpanded_ = !rankingPanelExpanded_;
+                    playSfx(2);
+                    continue;
+                }
             } else if (game_.getState() == GameState::PLAYING) {
+                float aspectPick = (float)width_ / height_;
+                float whwPick = kProjectionHalfHeight * aspectPick;
+                if (game_.isEndlessArenaMode() && hitRankingPanel(nx, ny, whwPick, rankingPanelExpanded_)) {
+                    rankingPanelExpanded_ = !rankingPanelExpanded_;
+                    playSfx(2);
+                    continue;
+                }
                 if (px < (float)width_ * 0.5f && joystickPointerId_ == -1) joystickPointerId_ = pointer.id;
                 else if (px >= (float)width_ * 0.5f && boostPointerId_ == -1) boostPointerId_ = pointer.id;
             } else if (game_.getState() == GameState::PAUSED) {
@@ -1092,6 +1307,7 @@ void Renderer::triggerGameOver() {
 }
 
 void Renderer::restartGame() {
+    game_.setEndlessArenaMode(endlessArenaActive_);
     game_.reset();
     game_.startGame();
     wasGameOver_ = false; pendingRestart_.store(false);
@@ -1099,6 +1315,7 @@ void Renderer::restartGame() {
 }
 
 void Renderer::goToMainMenu() {
+    game_.setEndlessArenaMode(endlessArenaActive_);
     game_.reset();
     game_.setState(GameState::MODE_SELECTION);
     wasGameOver_ = false; pendingMainMenu_.store(false);

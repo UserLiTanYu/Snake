@@ -83,6 +83,11 @@ private:
     TextTexture createTextTexture(const std::string& text, int fontSize);
     GLuint loadBackgroundTexture(const std::string& fileName);
 
+    void syncRankPanelTextures();
+    void drawEndlessRankPanel(float worldHalfWidth);
+    void releaseRankLineTextures();
+    void clearRankPanelCache();
+
     android_app *app_;
     EGLDisplay display_;
     EGLSurface surface_;
@@ -106,6 +111,14 @@ private:
 
     std::map<std::string, TextTexture> textTextures_;
     TextTexture dynamicCoinText_;
+
+    bool endlessArenaActive_ = false;
+    bool rankingPanelExpanded_ = true;
+    std::vector<int> rankSignature_;
+    std::vector<TextTexture> rankLineTextures_;
+
+    TextTexture endlessSnakeCountTex_;
+    int lastEndlessSnakeTotal_ = -1;
 
     GLuint startBackgroundTextureId_;
     GLuint gameBackgroundTextureId_;
