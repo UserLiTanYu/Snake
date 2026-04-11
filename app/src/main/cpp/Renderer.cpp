@@ -369,13 +369,6 @@ void aiPaletteRgb(int paletteId, float& r, float& g, float& b) {
     }
 }
 
-bool hitRankingPanel(float nx, float ny, float worldHalfWidth, bool expanded) {
-    const float left = -worldHalfWidth + 0.8f;
-    const float right = left + 14.2f;
-    const float top = 22.0f - 0.6f;
-    const float bottom = expanded ? top - 19.5f : top - 4.2f;
-    return nx > left && nx < right && ny < top && ny > bottom;
-}
 }
 
 void Renderer::releaseRankLineTextures() {
@@ -428,46 +421,105 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     const float topY = kProjectionHalfHeight - 2.2f;
 
     if (!rankingPanelExpanded_) {
-        drawShape(left + 7.2f, topY - 1.9f, 14.4f, 3.4f, 0.15f, 0.75f, 1.0f, 0.22f, false, 0.14f);
-        drawShape(left + 7.2f, topY - 1.9f, 14.0f, 3.0f, 0.05f, 0.07f, 0.14f, 0.9f, false, 0.12f);
+        const float barW = 14.0f;
+        const float barH = 3.0f;
+        const float cx = left + barW * 0.5f;
+        const float cy = topY - barH * 0.5f;
+        drawShape(cx, cy, barW + 0.4f, barH + 0.4f, 0.15f, 0.75f, 1.0f, 0.22f, false, 0.14f);
+        drawShape(cx, cy, barW, barH, 0.05f, 0.07f, 0.14f, 0.9f, false, 0.12f);
         if (textTextures_.count("rank_expand")) {
             auto& tex = textTextures_["rank_expand"];
             float tw = std::min(12.5f, tex.width);
             float th = tw * (tex.height / tex.width);
-            drawShape(left + 7.2f, topY - 1.9f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
+            drawShape(cx, cy, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
         }
+        rankPanelHitL_ = left;
+        rankPanelHitR_ = left + barW;
+        rankPanelHitT_ = topY;
+        rankPanelHitB_ = topY - barH;
         return;
     }
 
-    const float panelW = 14.5f;
-    const float panelH = 20.0f;
+    const float padX = 0.55f;
+    const float padY = 0.5f;
+    const float gapTitle = 0.45f;
+    const float lineSpacing = 0.65f;
+    const float gapHint = 0.4f;
+
+    float maxW = 0.0f;
+    float titleTw = 0.0f;
+    float titleTh = 0.0f;
+    if (textTextures_.count("rank_title")) {
+        auto& title = textTextures_["rank_title"];
+        titleTw = std::min(11.0f, title.width);
+        titleTh = titleTw * (title.height / title.width);
+        maxW = std::max(maxW, titleTw);
+    }
+
+    std::vector<float> lineWs;
+    std::vector<float> lineHs;
+    lineWs.reserve(rankLineTextures_.size());
+    lineHs.reserve(rankLineTextures_.size());
+    for (const auto& rt : rankLineTextures_) {
+        float lw = std::min(12.5f, rt.width);
+        float lh = lw * (rt.height / rt.width);
+        lineWs.push_back(lw);
+        lineHs.push_back(lh);
+        maxW = std::max(maxW, lw);
+    }
+
+    float hintW = 0.0f;
+    float hintH = 0.0f;
+    if (textTextures_.count("rank_fold")) {
+        auto& hint = textTextures_["rank_fold"];
+        hintW = std::min(10.0f, hint.width);
+        hintH = hintW * (hint.height / hint.width);
+        maxW = std::max(maxW, hintW);
+    }
+
+    float innerContentH = titleTh + gapTitle;
+    for (size_t i = 0; i < lineHs.size(); ++i) {
+        innerContentH += lineHs[i];
+        if (i + 1 < lineHs.size()) innerContentH += lineSpacing;
+    }
+    innerContentH += gapHint + hintH;
+
+    const float panelW = maxW + 2.0f * padX;
+    const float panelH = innerContentH + 2.0f * padY;
     const float cx = left + panelW * 0.5f;
     const float cy = topY - panelH * 0.5f;
 
     drawShape(cx, cy, panelW + 0.5f, panelH + 0.5f, 0.2f, 0.85f, 1.0f, 0.28f, false, 0.14f);
     drawShape(cx, cy, panelW, panelH, 0.04f, 0.06f, 0.12f, 0.9f, false, 0.11f);
 
-    if (textTextures_.count("rank_title")) {
-        auto& title = textTextures_["rank_title"];
-        float tw = std::min(11.0f, title.width);
-        float th = tw * (title.height / title.width);
-        drawShape(cx, topY - 3.2f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, title.id);
+    const float innerTop = topY - padY;
+    float yNextTop = innerTop - titleTh - gapTitle;
+    if (textTextures_.count("rank_title") && titleTh > 0.0f) {
+        float yTitleC = innerTop - titleTh * 0.5f;
+        drawShape(cx, yTitleC, titleTw, titleTh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["rank_title"].id);
     }
 
-    float y = topY - 6.0f;
-    for (const auto& rt : rankLineTextures_) {
-        float lw = std::min(12.5f, rt.width);
-        float lh = lw * (rt.height / rt.width);
-        drawShape(cx, y, lw, lh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, rt.id);
-        y -= lh + 0.65f;
+    for (size_t i = 0; i < lineHs.size(); ++i) {
+        float yc = yNextTop - lineHs[i] * 0.5f;
+        drawShape(cx, yc, lineWs[i], lineHs[i], 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, rankLineTextures_[i].id);
+        yNextTop -= lineHs[i];
+        if (i + 1 < lineHs.size()) yNextTop -= lineSpacing;
     }
 
-    if (textTextures_.count("rank_fold")) {
-        auto& hint = textTextures_["rank_fold"];
-        float hw = std::min(10.0f, hint.width);
-        float hh = hw * (hint.height / hint.width);
-        drawShape(cx, cy - panelH * 0.5f + 1.4f, hw, hh, 0.7f, 0.85f, 1.0f, 0.95f, false, 0.0f, hint.id);
+    yNextTop -= gapHint;
+    if (textTextures_.count("rank_fold") && hintH > 0.0f) {
+        float yHintC = yNextTop - hintH * 0.5f;
+        drawShape(cx, yHintC, hintW, hintH, 0.7f, 0.85f, 1.0f, 0.95f, false, 0.0f, textTextures_["rank_fold"].id);
     }
+
+    rankPanelHitL_ = left;
+    rankPanelHitR_ = left + panelW;
+    rankPanelHitT_ = topY;
+    rankPanelHitB_ = topY - panelH;
+}
+
+bool Renderer::hitEndlessRankPanel(float nx, float ny) const {
+    return nx > rankPanelHitL_ && nx < rankPanelHitR_ && ny < rankPanelHitT_ && ny > rankPanelHitB_;
 }
 
 void Renderer::drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& label) {
@@ -1146,17 +1198,13 @@ void Renderer::handleInput() {
                     playSfx(2);
                 }
             } else if (game_.getState() == GameState::GAME_OVER && game_.isEndlessArenaMode()) {
-                float aspectGo = (float)width_ / height_;
-                float whwGo = kProjectionHalfHeight * aspectGo;
-                if (hitRankingPanel(nx, ny, whwGo, rankingPanelExpanded_)) {
+                if (hitEndlessRankPanel(nx, ny)) {
                     rankingPanelExpanded_ = !rankingPanelExpanded_;
                     playSfx(2);
                     continue;
                 }
             } else if (game_.getState() == GameState::PLAYING) {
-                float aspectPick = (float)width_ / height_;
-                float whwPick = kProjectionHalfHeight * aspectPick;
-                if (game_.isEndlessArenaMode() && hitRankingPanel(nx, ny, whwPick, rankingPanelExpanded_)) {
+                if (game_.isEndlessArenaMode() && hitEndlessRankPanel(nx, ny)) {
                     rankingPanelExpanded_ = !rankingPanelExpanded_;
                     playSfx(2);
                     continue;

@@ -87,6 +87,7 @@ private:
     void drawEndlessRankPanel(float worldHalfWidth);
     void releaseRankLineTextures();
     void clearRankPanelCache();
+    bool hitEndlessRankPanel(float nx, float ny) const;
 
     android_app *app_;
     EGLDisplay display_;
@@ -119,6 +120,11 @@ private:
 
     TextTexture endlessSnakeCountTex_;
     int lastEndlessSnakeTotal_ = -1;
+
+    float rankPanelHitL_ = 0.0f;
+    float rankPanelHitR_ = 0.0f;
+    float rankPanelHitT_ = 0.0f;
+    float rankPanelHitB_ = 0.0f;
 
     GLuint startBackgroundTextureId_;
     GLuint gameBackgroundTextureId_;
