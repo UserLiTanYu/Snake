@@ -15,9 +15,17 @@ enum class GameState {
     PAUSED,
     STORE,
     SKIN_INVENTORY,
-    GAME_OVER
-};
+    GAME_OVER,
+    CHALLENGE_CLEAR,
+    CHALLENGE_SELECTION,
 
+};
+enum class GameMode {
+    ENDLESS,      // 无尽模式
+    CHALLENGE_1,   // 挑战关卡 1
+    CHALLENGE_2,
+    CHALLENGE_3
+};
 struct Vector2f {
     float x;
     float y;
@@ -72,17 +80,32 @@ struct RankPanelRow {
 class SnakeGame {
 public:
     SnakeGame(float worldWidth, float worldHeight);
-
+    void startChallengeLevel2();
+    void startChallengeLevel3();
     void update(float deltaTime);
     void setRotation(float angle);
     float getRotation() const { return rotation_; }
     void setBoosting(bool boosting);
-
+    int getChallengeTarget() const { return challengeTargetScore_; }
+    int getChallengeStars(GameMode mode) const;
+    int calculateStars(GameMode mode, int score) const;
     void setEquippedSkin(int skinId) { equippedSkin_ = skinId; }
     void setEndlessArenaMode(bool enabled) { endlessArenaMode_ = enabled; }
     bool isEndlessArenaMode() const { return endlessArenaMode_; }
-
+    void startChallengeLevel1();
     void reset();
+// 核心新增：保存读取最高分的接口
+    void setMaxScore(GameMode mode, int score) {
+        if (mode == GameMode::CHALLENGE_1) maxScoreCh1_ = score;
+        else if (mode == GameMode::CHALLENGE_2) maxScoreCh2_ = score;
+        else if (mode == GameMode::CHALLENGE_3) maxScoreCh3_ = score;
+    }
+    int getMaxScore(GameMode mode) const {
+        if (mode == GameMode::CHALLENGE_1) return maxScoreCh1_;
+        else if (mode == GameMode::CHALLENGE_2) return maxScoreCh2_;
+        else if (mode == GameMode::CHALLENGE_3) return maxScoreCh3_;
+        return 0;
+    }
 
     const std::vector<Vector2f>& getSnake() const { return snake_; }
     const std::vector<AISnake>& getAISnakes() const { return aiSnakes_; }
@@ -94,13 +117,14 @@ public:
     void setState(GameState s) { state_ = s; }
     void startGame() { state_ = GameState::PLAYING; }
     bool hasShield() const { return shieldTimer_ > 0.0f; }
-
+    const std::vector<Vector2f>& getWalls() const { return walls_; }
+    GameMode getGameMode() const { return currentMode_; }
     float getWorldWidth() const { return worldWidth_; }
     float getWorldHeight() const { return worldHeight_; }
 
     std::vector<RankEntry> getLengthLeaderboard() const;
     std::vector<RankPanelRow> getRankPanelRows() const;
-
+    GameMode getCurrentMode() const { return currentMode_; }
 private:
     void spawnFood();
     void spawnPowerUp();
@@ -116,7 +140,11 @@ private:
     void spawnFoodFromDeadAI(const AISnake& ai);
     static void followSegments(std::vector<Vector2f>& segments, float segmentDistance);
     bool checkCollisionWithSelf() const;
+    void checkAIVsAITail(); // AI 互撞身体检测
 
+    int maxScoreCh1_ = 0;
+    int maxScoreCh2_ = 0;
+    int maxScoreCh3_ = 0;
     float worldWidth_;
     float worldHeight_;
     std::vector<Vector2f> snake_;
@@ -149,6 +177,10 @@ private:
     float magnetTimer_;
 
     std::mt19937 rng_;
+    std::vector<Vector2f> walls_;           // 存储所有墙壁的坐标
+    GameMode currentMode_ = GameMode::ENDLESS; // 当前游戏模式
+    int challengeTargetScore_ = 500;        // 过关目标分数
+    float wallRadius_ = 1.0f;               // 墙壁的碰撞判定大小
 };
 
 #endif // NEON_SNAKE_GAME_H

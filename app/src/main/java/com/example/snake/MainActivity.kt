@@ -31,7 +31,17 @@ class MainActivity : GameActivity() {
     private var eatSoundId = 0
     private var clinkSoundId = 0
     private var dieSoundId = 0
+    fun saveChallengeScore(mode: Int, score: Int) {
+        val prefs = getSharedPreferences("GameData", MODE_PRIVATE)
+        // mode对应C++中的枚举: CHALLENGE_1 = 1, CHALLENGE_2 = 2... 以此类推
+        prefs.edit().putInt("ChallengeScore_$mode", score).apply()
+    }
 
+    // 读取对应关卡的最高分
+    fun loadChallengeScore(mode: Int): Int {
+        val prefs = getSharedPreferences("GameData", MODE_PRIVATE)
+        return prefs.getInt("ChallengeScore_$mode", 0)
+    }
     private var menuBgmPlayer: MediaPlayer? = null
     private var gameBgmPlayer: MediaPlayer? = null
     private var currentMusicMode = 0

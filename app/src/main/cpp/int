@@ -1,0 +1,17 @@
+$files = Get-ChildItem -Recurse -Include *.h, *.txt, *.cpp
+
+# 1. 先写入文件清单（目录）
+"==========================================" > all_code.txt
+"PROJECT FILE LIST (INDEX):" >> all_code.txt
+"==========================================" >> all_code.txt
+$files.FullName >> all_code.txt
+"`n`n" >> all_code.txt
+
+# 2. 依次写入每个文件的详细内容
+$files | ForEach-Object {
+    "------------------------------------------" >> all_code.txt
+    "START OF FILE: $($_.FullName)" >> all_code.txt
+    "------------------------------------------" >> all_code.txt
+    Get-Content $_ >> all_code.txt
+    "`n" >> all_code.txt
+}

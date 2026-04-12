@@ -70,6 +70,10 @@ void SnakeGame::reset() {
     snake_.clear();
     pathHistory_.clear();
     aiSnakes_.clear();
+    walls_.clear();
+    if (endlessArenaMode_) {
+        currentMode_ = GameMode::ENDLESS;
+    }
 
     Vector2f head = {worldWidth_ / 2.0f, worldHeight_ / 2.0f};
     snake_.push_back(head);
@@ -162,31 +166,103 @@ void SnakeGame::spawnOneAISnake() {
     ai.displayName = kBotNamePool[namePick(rng_)];
     aiSnakes_.push_back(std::move(ai));
 }
-
 void SnakeGame::tickPeriodicAISpawn(float deltaTime) {
-    if (!endlessArenaMode_ || state_ != GameState::PLAYING) return;
+    bool useAI = endlessArenaMode_ || currentMode_ == GameMode::CHALLENGE_2 || currentMode_ == GameMode::CHALLENGE_3;
+    if (!useAI || state_ != GameState::PLAYING) return;
+
     aiSpawnTimer_ -= deltaTime;
     if (aiSpawnTimer_ > 0.0f) return;
+
     aiSpawnTimer_ = kAiSpawnIntervalSec;
-    if (aiSnakes_.size() < static_cast<size_t>(kMaxAiSnakes)) {
+
+    // 不同关卡的 AI 上限
+    int maxAi = 0;
+    if (endlessArenaMode_) maxAi = kMaxAiSnakes;
+    else if (currentMode_ == GameMode::CHALLENGE_2) maxAi = 33;  // 挑战二：3条机器蛇
+    else if (currentMode_ == GameMode::CHALLENGE_3) maxAi = 20;  // 挑战三：6条机器蛇
+
+    if (aiSnakes_.size() < static_cast<size_t>(maxAi)) {
         spawnOneAISnake();
     }
 }
-
 void SnakeGame::spawnFood() {
     std::uniform_real_distribution<float> distX(1.0f, worldWidth_ - 1.0f);
     std::uniform_real_distribution<float> distY(1.0f, worldHeight_ - 1.0f);
     std::uniform_int_distribution<int> distColor(0, 5);
-    foods_.push_back({{distX(rng_), distY(rng_)}, false, distColor(rng_), 1});
+
+    Vector2f pos;
+    bool valid = false;
+    // 尝试最多 50 次寻找不在墙里的空地
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        pos = {distX(rng_), distY(rng_)};
+        valid = true;
+        for (const auto& wall : walls_) {
+            float dx = pos.x - wall.x;
+            float dy = pos.y - wall.y;
+            // 食物半径约 0.4f，加上墙壁半径和一点缓冲余量 0.5f
+            if (std::sqrt(dx*dx + dy*dy) < (0.4f + wallRadius_ + 0.5f)) {
+                valid = false;
+                break;
+            }
+        }
+        if (valid) break;
+    }
+
+    foods_.push_back({pos, false, distColor(rng_), 1});
 }
 
+void SnakeGame::startChallengeLevel1() {
+    endlessArenaMode_ = false; // 修复：防止前一个无尽模式的AI逻辑干扰
+    reset();
+
+    currentMode_ = GameMode::CHALLENGE_1;
+    challengeTargetScore_ = 5;
+
+    float spawnX = worldWidth_ * 0.5f;
+    float spawnY = worldHeight_ * 0.5f;
+    float safeZoneRadius = 10.0f;
+    float step = 2.0f;
+
+    float midY = worldHeight_ * 0.5f;
+    for(float x = worldWidth_ * 0.2f; x <= worldWidth_ * 0.8f; x += step) {
+        if (std::abs(x - spawnX) > safeZoneRadius || std::abs(midY - spawnY) > safeZoneRadius) {
+            walls_.push_back({x, midY});
+        }
+    }
+
+    float midX = worldWidth_ * 0.5f;
+    for(float y = worldHeight_ * 0.2f; y <= worldHeight_ * 0.8f; y += step) {
+        if (std::abs(midX - spawnX) > safeZoneRadius || std::abs(y - spawnY) > safeZoneRadius) {
+            walls_.push_back({midX, y}); // 修复：原先这里x, y写反了
+        }
+    }
+
+    state_ = GameState::PLAYING;
+}
 void SnakeGame::spawnPowerUp() {
     std::uniform_real_distribution<float> distX(2.0f, worldWidth_ - 2.0f);
     std::uniform_real_distribution<float> distY(2.0f, worldHeight_ - 2.0f);
     std::uniform_int_distribution<int> distType(0, 2);
-    powerUps_.push_back({{distX(rng_), distY(rng_)}, static_cast<PowerUpType>(distType(rng_))});
-}
 
+    Vector2f pos;
+    bool valid = false;
+    for (int attempt = 0; attempt < 50; ++attempt) {
+        pos = {distX(rng_), distY(rng_)};
+        valid = true;
+        for (const auto& wall : walls_) {
+            float dx = pos.x - wall.x;
+            float dy = pos.y - wall.y;
+            // 道具半径比食物大一点，约 1.0f，加上余量
+            if (std::sqrt(dx*dx + dy*dy) < (1.0f + wallRadius_ + 0.5f)) {
+                valid = false;
+                break;
+            }
+        }
+        if (valid) break;
+    }
+
+    powerUps_.push_back({pos, static_cast<PowerUpType>(distType(rng_))});
+}
 void SnakeGame::setRotation(float angle) {
     rotation_ = angle;
 }
@@ -280,6 +356,7 @@ void SnakeGame::update(float deltaTime) {
         }
     }
 
+    // --- 玩家吃食物逻辑 ---
     auto it = foods_.begin();
     while (it != foods_.end()) {
         float dx = head.x - it->pos.x;
@@ -293,6 +370,8 @@ void SnakeGame::update(float deltaTime) {
 
         if (std::sqrt(dx * dx + dy * dy) < eatRadius + currentFoodRadius) {
             score_ += it->value;
+
+
             float growthAmount = (float)it->value / scaleBase;
             pendingGrowth_ += growthAmount;
 
@@ -303,12 +382,13 @@ void SnakeGame::update(float deltaTime) {
 
             std::swap(*it, foods_.back());
             foods_.pop_back();
-            if (foods_.size() < 90) spawnFood();
+            // 注意：这里删除了原来错误嵌套的 AI 逻辑代码！
         } else {
             ++it;
         }
     }
 
+    // --- 道具逻辑 ---
     auto puIt = powerUps_.begin();
     while (puIt != powerUps_.end()) {
         float dx = head.x - puIt->pos.x;
@@ -323,22 +403,26 @@ void SnakeGame::update(float deltaTime) {
         }
     }
 
-    if (endlessArenaMode_) {
+    // --- AI 的更新逻辑必须放在所有食物遍历的外面！ ---
+    bool useAI = endlessArenaMode_ || currentMode_ == GameMode::CHALLENGE_2 || currentMode_ == GameMode::CHALLENGE_3;
+    if (useAI) {
         tickPeriodicAISpawn(deltaTime);
         if (!aiSnakes_.empty()) {
             moveAISnakes(deltaTime);
             aiEatFood();
             checkAIHeadToHeadCollisions();
+            checkAIVsAITail(); // AI 头撞 AI 身体检测
             checkAIvsPlayerTail();
             checkPlayerVsAI();
             if (state_ == GameState::GAME_OVER) return;
         }
     }
 
+    // --- 补充场地道具与食物 ---
+    while (foods_.size() < 90) spawnFood();
     if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
         spawnFood();
     }
-
     while (powerUps_.size() < 3) spawnPowerUp();
     if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
         spawnPowerUp();
@@ -348,10 +432,15 @@ void SnakeGame::update(float deltaTime) {
 void SnakeGame::moveAISnakes(float deltaTime) {
     Vector2f worldCenter = {worldWidth_ * 0.5f, worldHeight_ * 0.5f};
 
-    for (auto& ai : aiSnakes_) {
-        if (ai.segments.empty()) continue;
+    // 修复：改用索引遍历，因为如果 AI 撞墙死了，我们需要安全地把它从数组里删掉
+    for (size_t i = 0; i < aiSnakes_.size(); ) {
+        AISnake& ai = aiSnakes_[i];
+        if (ai.segments.empty()) {
+            ++i; continue;
+        }
 
         float scaleBase = 1.0f + std::min(ai.score * 0.02f, 2.0f);
+        float collisionRadius = 0.4f * scaleBase; // AI 碰撞大小
         float speed = baseSpeed_ * 0.9f;
         Vector2f aHead = ai.segments.front();
 
@@ -363,23 +452,42 @@ void SnakeGame::moveAISnakes(float deltaTime) {
             ai.wanderTimer = wt(rng_);
         }
 
-        Food* nearest = nullptr;
-        float bestD = 1e9f;
+        // ==========================================
+        // 修复问题三：智能索敌，防止“死亡螺旋”绕圈
+        // ==========================================
+        Food* bestFood = nullptr;
+        float bestScore = 1e9f; // 用分数代替纯距离，分数越低越好
+        Vector2f headDir = {std::cos(ai.rotation), std::sin(ai.rotation)};
+
         for (auto& food : foods_) {
-            float dx = food.pos.x - aHead.x;
-            float dy = food.pos.y - aHead.y;
-            float d = std::sqrt(dx * dx + dy * dy);
-            if (d < bestD) {
-                bestD = d;
-                nearest = &food;
+            Vector2f toFood = {food.pos.x - aHead.x, food.pos.y - aHead.y};
+            float dist = std::sqrt(toFood.x * toFood.x + toFood.y * toFood.y);
+            if (dist < 0.1f) continue;
+
+            // 计算食物相对于蛇头朝向的点积（夹角余弦值）
+            Vector2f toFoodDir = {toFood.x / dist, toFood.y / dist};
+            float dotProduct = headDir.x * toFoodDir.x + headDir.y * toFoodDir.y;
+
+            float score = dist;
+
+            // 核心逻辑：如果食物离得近（距离<5.0），但点积小于0（意味着在蛇的后半球侧面/背后）
+            // 说明蛇冲过头了，此时给它加巨大的惩罚分，让它放弃这个食物，去找远处的！
+            if (dist < 5.0f && dotProduct < 0.0f) {
+                score += 100.0f;
+            }
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestFood = &food;
             }
         }
 
         float desired = ai.rotation;
-        if (nearest) {
-            desired = std::atan2(nearest->pos.y - aHead.y, nearest->pos.x - aHead.x);
+        if (bestFood && bestScore < 90.0f) { // 只有没被加惩罚的食物才去追
+            desired = std::atan2(bestFood->pos.y - aHead.y, bestFood->pos.x - aHead.x);
         }
 
+        // 避开边界墙壁的推力
         float margin = 6.0f;
         if (aHead.x < margin || aHead.x > worldWidth_ - margin || aHead.y < margin || aHead.y > worldHeight_ - margin) {
             Vector2f toC = worldCenter - aHead;
@@ -392,17 +500,41 @@ void SnakeGame::moveAISnakes(float deltaTime) {
         Vector2f dir = {std::cos(ai.rotation), std::sin(ai.rotation)};
         Vector2f nextHead = aHead + dir * speed * deltaTime;
 
+        // 边界限制
         if (nextHead.x < 0.5f) nextHead.x = 0.5f;
         else if (nextHead.x > worldWidth_ - 0.5f) nextHead.x = worldWidth_ - 0.5f;
         if (nextHead.y < 0.5f) nextHead.y = 0.5f;
         else if (nextHead.y > worldHeight_ - 0.5f) nextHead.y = worldHeight_ - 0.5f;
 
+        // ==========================================
+        // 修复问题一：AI 撞墙检测
+        // ==========================================
+        bool hitWall = false;
+        for (const auto& wall : walls_) {
+            float dx = nextHead.x - wall.x;
+            float dy = nextHead.y - wall.y;
+            if (std::sqrt(dx*dx + dy*dy) < (collisionRadius + wallRadius_)) {
+                hitWall = true;
+                break;
+            }
+        }
+
+        // 如果撞墙了，爆食物，并删除这条 AI 蛇
+        if (hitWall) {
+            spawnFoodFromDeadAI(ai);
+            aiSnakes_.erase(aiSnakes_.begin() + i);
+            // 注意：因为删除了当前元素，后面的元素会前移，所以千万不要执行 ++i，直接 continue
+            continue;
+        }
+
+        // 没撞墙，正常应用移动
         ai.segments[0] = nextHead;
         float currentSegDist = 0.5f * scaleBase;
         followSegments(ai.segments, currentSegDist);
+
+        ++i; // 处理下一条 AI 蛇
     }
 }
-
 void SnakeGame::aiEatFood() {
     for (auto& ai : aiSnakes_) {
         if (ai.segments.empty()) continue;
@@ -419,6 +551,7 @@ void SnakeGame::aiEatFood() {
             float currentFoodRadius = 0.4f * foodScale;
             float dx = aHead.x - it->pos.x;
             float dy = aHead.y - it->pos.y;
+
             if (std::sqrt(dx * dx + dy * dy) < eatRadius + currentFoodRadius) {
                 ai.score += it->value;
                 float growthAmount = (float)it->value / scaleBase;
@@ -427,8 +560,10 @@ void SnakeGame::aiEatFood() {
                     ai.segments.push_back(ai.segments.back());
                     ai.pendingGrowth -= 1.0f;
                 }
-                it = foods_.erase(it);
-                if (foods_.size() < 90) spawnFood();
+
+                // 更安全快速的删除方式，不在这内部生成食物
+                std::swap(*it, foods_.back());
+                foods_.pop_back();
             } else {
                 ++it;
             }
@@ -640,19 +775,145 @@ void SnakeGame::move(float deltaTime) {
     snake_[0] = nextHead;
     followSegments(snake_, currentSegDist);
 
-    if (shieldTimer_ <= 0.0f && !endlessArenaMode_) {
-        for (size_t i = 10; i < snake_.size(); ++i) {
-            float dx = nextHead.x - snake_[i].x;
-            float dy = nextHead.y - snake_[i].y;
 
-            if (std::sqrt(dx * dx + dy * dy) < collisionRadius) {
+    // 1. 墙壁碰撞检测
+    if (shieldTimer_ <= 0.0f) {
+        for (const auto& wall : walls_) {
+            float dx = head.x - wall.x;
+            float dy = head.y - wall.y;
+            if (std::sqrt(dx*dx + dy*dy) < (collisionRadius + wallRadius_)) {
                 state_ = GameState::GAME_OVER;
                 return;
             }
         }
     }
+
+    // 2. 目标分数通关检测 (适当调高挑战分数)
+    if (currentMode_ == GameMode::CHALLENGE_1 && score_ >= challengeTargetScore_) state_ = GameState::CHALLENGE_CLEAR;
+    if (currentMode_ == GameMode::CHALLENGE_2 && score_ >= challengeTargetScore_) state_ = GameState::CHALLENGE_CLEAR;
+    if (currentMode_ == GameMode::CHALLENGE_3 && score_ >= challengeTargetScore_) state_ = GameState::CHALLENGE_CLEAR;
 }
 
+void SnakeGame::startChallengeLevel2() {
+    endlessArenaMode_ = false;
+    reset();
+    currentMode_ = GameMode::CHALLENGE_2;
+    challengeTargetScore_ = 60;
+
+    // 修复问题三：提高第二关初始速度（由于AI共用该基准速度，AI也会变快）
+    baseSpeed_ = 13.0f;
+
+    float step = 2.0f;
+
+    // 修复问题二：第二关特征改成四个角落的 "L" 形开口图案，不再憋死
+    float leftX = worldWidth_ * 0.15f;
+    float rightX = worldWidth_ * 0.85f;
+    float topY = worldHeight_ * 0.85f;
+    float botY = worldHeight_ * 0.15f;
+    float len = worldWidth_ * 0.2f; // L型墙壁的手臂长度
+
+    // 左上角 L
+    for (float x = leftX; x <= leftX + len; x += step) walls_.push_back({x, topY});
+    for (float y = topY - len; y <= topY; y += step) walls_.push_back({leftX, y});
+    // 右上角 L
+    for (float x = rightX - len; x <= rightX; x += step) walls_.push_back({x, topY});
+    for (float y = topY - len; y <= topY; y += step) walls_.push_back({rightX, y});
+    // 左下角 L
+    for (float x = leftX; x <= leftX + len; x += step) walls_.push_back({x, botY});
+    for (float y = botY; y <= botY + len; y += step) walls_.push_back({leftX, y});
+    // 右下角 L
+    for (float x = rightX - len; x <= rightX; x += step) walls_.push_back({x, botY});
+    for (float y = botY; y <= botY + len; y += step) walls_.push_back({rightX, y});
+
+    // 修复问题四：为第二关生成初期的 AI 机器蛇
+    for (int i = 0; i < 3; ++i) spawnOneAISnake();
+
+    state_ = GameState::PLAYING;
+}
+
+void SnakeGame::startChallengeLevel3() {
+    endlessArenaMode_ = false;
+    reset();
+    currentMode_ = GameMode::CHALLENGE_3;
+    challengeTargetScore_ = 60;
+
+    // 修复问题三：第三关拥有极致的魔鬼速度
+    baseSpeed_ = 20.0f;
+
+    float spawnX = worldWidth_ * 0.5f;
+    float spawnY = worldHeight_ * 0.5f;
+    float safeZoneRadius = 15.0f;
+    float step = 4.0f;
+
+    // 第三关特征：全地图散落的“梅花桩”障碍物
+    for(float x = 10.0f; x <= worldWidth_ - 10.0f; x += step * 2.5f) {
+        for(float y = 10.0f; y <= worldHeight_ - 10.0f; y += step * 2.5f) {
+            // 保证出生点附近绝对安全
+            if (std::abs(x - spawnX) > safeZoneRadius || std::abs(y - spawnY) > safeZoneRadius) {
+                // 随机去留，形成迷宫感
+                if (std::uniform_real_distribution<float>(0, 1)(rng_) > 0.3f) {
+                    walls_.push_back({x, y});
+                }
+            }
+        }
+    }
+
+    // 修复问题四：为第三关生成大批量、极高移速的机器蛇
+    for (int i = 0; i < 6; ++i) spawnOneAISnake();
+
+    state_ = GameState::PLAYING;
+}
+void SnakeGame::checkAIVsAITail() {
+    for (size_t i = 0; i < aiSnakes_.size(); ) {
+        bool died = false;
+        if (!aiSnakes_[i].segments.empty()) {
+            Vector2f head = aiSnakes_[i].segments[0];
+            float scaleBase = 1.0f + std::min(aiSnakes_[i].score * 0.02f, 2.0f);
+            float headR = 0.45f * scaleBase;
+
+            for (size_t j = 0; j < aiSnakes_.size(); ++j) {
+                if (i == j || aiSnakes_[j].segments.empty()) continue;
+                float targetScale = 1.0f + std::min(aiSnakes_[j].score * 0.02f, 2.0f);
+                float bodyR = 0.38f * targetScale;
+                for (size_t k = 1; k < aiSnakes_[j].segments.size(); ++k) {
+                    float dx = head.x - aiSnakes_[j].segments[k].x;
+                    float dy = head.y - aiSnakes_[j].segments[k].y;
+                    if (std::sqrt(dx*dx + dy*dy) < headR + bodyR) {
+                        died = true; break;
+                    }
+                }
+                if (died) break;
+            }
+        }
+        if (died) {
+            spawnFoodFromDeadAI(aiSnakes_[i]);
+            aiSnakes_.erase(aiSnakes_.begin() + i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+int SnakeGame::calculateStars(GameMode mode, int score) const {
+    int target = 30;
+    if (mode == GameMode::CHALLENGE_1) target = 5;       // 修复：第一关实际目标是 5
+    else if (mode == GameMode::CHALLENGE_2) target = 60;
+    else if (mode == GameMode::CHALLENGE_3) target = 60;
+
+    if (score >= target) return 3;
+    if (score >= target * 2 / 3) return 2;
+    if (score >= target / 3) return 1;
+    return 0;
+}
+
+int SnakeGame::getChallengeStars(GameMode mode) const {
+    int score = 0;
+    if (mode == GameMode::CHALLENGE_1) score = maxScoreCh1_;
+    else if (mode == GameMode::CHALLENGE_2) score = maxScoreCh2_;
+    else if (mode == GameMode::CHALLENGE_3) score = maxScoreCh3_;
+
+    return calculateStars(mode, score);
+}
 bool SnakeGame::checkCollisionWithSelf() const {
     return false;
 }

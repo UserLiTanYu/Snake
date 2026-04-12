@@ -27,7 +27,7 @@ class Renderer {
 public:
     Renderer(android_app *pApp);
     virtual ~Renderer();
-
+    bool wasChallengeClear_ = false;
     void requestExitDialog() { pendingExitDialog_.store(true); }
     void handleInput();
     void render();
@@ -39,11 +39,12 @@ public:
     GameState getGameState() { return game_.getState(); }
 
 private:
+    TextTexture challengeProgressTex_;
     void initRenderer();
     void updateRenderArea();
     void createModels();
 
-    void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0, bool isGear = false, bool isLightning = false, float rotation = 0.0f);
+    void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0, bool isGear = false, bool isLightning = false, float rotation = 0.0f, bool isStar = false);
     void drawSnakeHeadEyes(float headX, float headY, float facingRad, float bodyRadius);
     void drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& text = "");
     void triggerGameOver();
@@ -61,7 +62,8 @@ private:
     bool buySkin(int skinId, int price);
     int getEquippedSkin();
     void equipSkin(int skinId);
-
+    void saveChallengeScore(int mode, int score);
+    int loadChallengeScore(int mode);
     std::atomic<bool> pendingExitDialog_{false};
     std::atomic<bool> pendingReturnMenuDialog_{false};
 
@@ -148,7 +150,7 @@ private:
     float rankPanelHitR_ = 0.0f;
     float rankPanelHitT_ = 0.0f;
     float rankPanelHitB_ = 0.0f;
-
+    GLuint challengeBackgroundTextureId_;
     GLuint startBackgroundTextureId_;
     GLuint gameBackgroundTextureId_;
     GLuint playingBackgroundTextureId_;
