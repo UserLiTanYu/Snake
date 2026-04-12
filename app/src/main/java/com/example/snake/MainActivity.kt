@@ -337,7 +337,20 @@ class MainActivity : GameActivity() {
             onNeg = { nativeGoToMainMenu() }
         )
     }
+    @Keep
+    fun showChallengeFailDialog(stars: Int, score: Int) {
+        // 根据获得的星星数生成图标，比如 1星就是 ⭐☆☆
+        val starStr = "⭐".repeat(stars) + "☆".repeat(3 - stars)
 
+        showCuteDialog(
+            title = "挑战失败！", // 💔
+            message = "哎呀，撞到了！\n\n本次评级: $starStr\n当前长度: $score\n\n不要灰心，再试一次吧！",
+            posText = "重新挑战",
+            negText = "返回主界面",
+            onPos = { nativeRestartGame() },
+            onNeg = { nativeGoToMainMenu() }
+        )
+    }
     @Keep
     fun getTextPixels(text: String, fontSize: Int): IntArray {
         val paint = Paint()

@@ -2222,24 +2222,51 @@ void Renderer::handleInput() {
 
     android_app_clear_motion_events(inputBuffer);
 }
-    void Renderer::triggerGameOver() {
-        JNIEnv *env;
-        bool needsDetach = false;
-        if (app_->activity->vm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_EDETACHED) {
-            if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return;
-            needsDetach = true;
+void Renderer::triggerGameOver() {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return;
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+
+    int score = game_.getScore();
+
+    // 判断当前是否是挑战模式 (你可以根据你实际的枚举或判断函数来写)
+    // 这里假设你有 getCurrentMode()，且模式不是 ENDLESS
+    if (!game_.isEndlessArenaMode()) {
+        // 【挑战模式失败】: 玩家撞墙死了
+        int stars = game_.calculateStars(game_.getCurrentMode(), score);
+
+        // ==========================================
+        // ★ 新增：在这里也要检查并保存历史最高分！★
+        // 这样即使玩家只拿到了 1 星或 2 星就死了，只要破了记录也能存下来！
+        int savedMax = game_.getMaxScore(game_.getCurrentMode());
+        if (score > savedMax) {
+            game_.setMaxScore(game_.getCurrentMode(), score);
+            // 调用 JNI 保存分数到本地
+            jmethodID saveMethod = env->GetMethodID(clazz, "saveChallengeScore", "(II)V");
+            if (saveMethod) env->CallVoidMethod(activityObj, saveMethod, (jint)game_.getCurrentMode(), (jint)score);
         }
-        jobject activityObj = app_->activity->javaGameActivity;
-        jclass clazz = env->GetObjectClass(activityObj);
+        // ==========================================
 
-        int score = game_.getScore();
+        // 弹出失败(显示星星)的弹窗
+        jmethodID method = env->GetMethodID(clazz, "showChallengeFailDialog", "(II)V");
+        if (method) env->CallVoidMethod(activityObj, method, (jint) stars, (jint) score);
+    }
+    else {
+        // 【无尽模式失败】: 原本的逻辑
         int earnedCoins = score * 10;
-
         jmethodID method = env->GetMethodID(clazz, "showGameOverDialog", "(II)V");
         if (method) env->CallVoidMethod(activityObj, method, (jint) score, (jint) earnedCoins);
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        if (needsDetach) app_->activity->vm->DetachCurrentThread();
     }
+
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    env->DeleteLocalRef(clazz);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+}
 
 void Renderer::restartGame() {
     pendingRestart_.store(false);
