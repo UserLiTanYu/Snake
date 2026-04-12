@@ -274,42 +274,43 @@ class MainActivity : GameActivity() {
                 or View.SYSTEM_UI_FLAG_FULLSCREEN)
     }
 
+
     @Keep
     fun showExitDialog() {
-        runOnUiThread {
-            AlertDialog.Builder(this)
-                .setTitle("退出游戏")
-                .setMessage("确定要离开蛇蛇大作战吗？")
-                .setPositiveButton("确认退出") { _, _ -> finish() }
-                .setNegativeButton("再玩一会", null)
-                .show()
-        }
+        showCuteDialog(
+            title = "退出游戏？", // 🥺
+            message = "确定要离开贪吃蛇大作战吗！\n",
+            posText = "再玩一会", // 绿色按钮留给积极选项
+            negText = "确认退出", // 蓝色按钮留给消极选项
+            onPos = { /* 玩家点击陪陪它，直接关闭弹窗即可 */ },
+            onNeg = { finish() }
+        )
     }
+
 
     @Keep
     fun showReturnToMenuDialog() {
-        runOnUiThread {
-            AlertDialog.Builder(this)
-                .setTitle("是否要返回主菜单？")
-                .setMessage("当前游戏进度将会丢失。")
-                .setCancelable(false)
-                .setPositiveButton("返回主菜单") { _, _ -> nativeGoToMainMenu() }
-                .setNegativeButton("继续游戏", null)
-                .show()
-        }
+        showCuteDialog(
+            title = "是否要返回主菜单？", // 💨
+            message = "当前游戏进度将会丢失！",
+            posText = "继续游戏",
+            negText = "返回主菜单",
+            onPos = { /* 直接关闭弹窗，继续游戏 */ },
+            onNeg = { nativeGoToMainMenu() }
+        )
     }
+
 
     @Keep
     fun showGameOverDialog(score: Int, coins: Int) {
-        runOnUiThread {
-            AlertDialog.Builder(this)
-                .setTitle("游戏结束")
-                .setMessage("你的最终得分是: $score\n获得金币: $coins\n要再试一次吗？")
-                .setCancelable(false)
-                .setPositiveButton("重新开始") { _, _ -> nativeRestartGame() }
-                .setNegativeButton("返回主界面") { _, _ -> nativeGoToMainMenu() }
-                .show()
-        }
+        showCuteDialog(
+            title = "游戏结束！", // 💥
+            message = "最终长度: $score\n收集金币: $coins\n\n要再试一次吗？", // 👑
+            posText = "重新开始！",
+            negText = "返回主界面",
+            onPos = { nativeRestartGame() },
+            onNeg = { nativeGoToMainMenu() }
+        )
     }
 
     @Keep
@@ -439,6 +440,114 @@ class MainActivity : GameActivity() {
             intArrayOf(width, height) + pixels
         } catch (e: Exception) {
             intArrayOf(0, 0)
+        }
+    }
+
+    // --- 核心新增：卡通可爱风弹窗构建器 ---
+    private fun showCuteDialog(
+        title: String,
+        message: String,
+        posText: String,
+        negText: String,
+        onPos: () -> Unit,
+        onNeg: (() -> Unit)? = null
+    ) {
+        runOnUiThread {
+            val dialog = android.app.Dialog(this)
+            // 去除系统默认背景，让我们自定义的圆角生效
+            dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            dialog.setCancelable(false)
+
+            val dp = { value: Int -> (value * resources.displayMetrics.density).toInt() }
+
+            // 1. 弹窗主背景容器
+            val layout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(dp(24), dp(28), dp(24), dp(24))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.parseColor("#FFFDF5")) // 奶黄色背景
+                    cornerRadius = dp(24).toFloat()
+                    setStroke(dp(4), Color.parseColor("#FFD166")) // 暖黄色卡通描边
+                }
+            }
+
+            // 2. 弹窗标题
+            val titleView = android.widget.TextView(this).apply {
+                text = title
+                textSize = 22f
+                setTextColor(Color.parseColor("#FF6B6B")) // 活泼的粉红色
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 0, 0, dp(16))
+            }
+            layout.addView(titleView)
+
+            // 3. 弹窗正文
+            val msgView = android.widget.TextView(this).apply {
+                text = message
+                textSize = 16f
+                setTextColor(Color.parseColor("#4A4E69")) // 深灰蓝，看起来很舒服
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 0, 0, dp(28))
+            }
+            layout.addView(msgView)
+
+            // 4. 按钮排列容器
+            val btnLayout = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
+            }
+
+            // 左侧按钮 (通常是取消或退出)
+            if (negText.isNotEmpty()) {
+                val negBtn = android.widget.Button(this).apply {
+                    text = negText
+                    textSize = 16f
+                    setTextColor(Color.WHITE)
+                    typeface = Typeface.DEFAULT_BOLD
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        setColor(Color.parseColor("#8ECAE6")) // 浅蓝色
+                        cornerRadius = dp(20).toFloat()
+                    }
+                    isAllCaps = false
+                    setPadding(dp(16), dp(10), dp(16), dp(10))
+                    setOnClickListener {
+                        onNeg?.invoke()
+                        dialog.dismiss()
+                    }
+                }
+                val lp = android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                lp.setMargins(0, 0, dp(8), 0)
+                btnLayout.addView(negBtn, lp)
+            }
+
+            // 右侧按钮 (通常是继续或积极操作)
+            val posBtn = android.widget.Button(this).apply {
+                text = posText
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                typeface = Typeface.DEFAULT_BOLD
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.parseColor("#06D6A0")) // 活泼的薄荷绿
+                    cornerRadius = dp(20).toFloat()
+                }
+                isAllCaps = false
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+                setOnClickListener {
+                    onPos.invoke()
+                    dialog.dismiss()
+                }
+            }
+            val posLp = android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            if (negText.isNotEmpty()) posLp.setMargins(dp(8), 0, 0, 0)
+            btnLayout.addView(posBtn, posLp)
+
+            layout.addView(btnLayout)
+            dialog.setContentView(layout)
+
+            // 将弹窗宽度锁定为屏幕宽度的 80%，看起来刚刚好
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.80).toInt(), android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            dialog.show()
         }
     }
 
