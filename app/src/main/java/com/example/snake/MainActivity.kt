@@ -324,6 +324,21 @@ class MainActivity : GameActivity() {
     }
 
     @Keep
+    fun showChallengeClearDialog(stars: Int, score: Int) {
+        // 根据传入的星星数量，生成星星字符串 (比如 3星就是 ⭐⭐⭐，2星就是 ⭐⭐☆)
+        val starStr = "⭐".repeat(stars) + "☆".repeat(3 - stars)
+
+        showCuteDialog(
+            title = "挑战成功！", // 🎉
+            message = "太棒了，顺利通关！\n\n获得评级: $starStr\n最终分数: $score",
+            posText = "重新挑战",
+            negText = "返回主界面",
+            onPos = { nativeRestartGame() },
+            onNeg = { nativeGoToMainMenu() }
+        )
+    }
+
+    @Keep
     fun getTextPixels(text: String, fontSize: Int): IntArray {
         val paint = Paint()
         paint.textSize = fontSize.toFloat()

@@ -1301,15 +1301,49 @@ void Renderer::render() {
     float worldHalfWidth = kProjectionHalfHeight * aspect;
     if (currentState == GameState::CHALLENGE_CLEAR && !wasChallengeClear_) {
         wasChallengeClear_ = true;
-        playSfx(1); // 可以换成专属的胜利音效ID
-        int earnedCoins = game_.getScore() * 20; // 挑战成功奖励多一点
+        playSfx(1); // 播放胜利音效
+
+        int earnedCoins = game_.getScore() * 20;
         addCoins(earnedCoins);
+
         int curScore = game_.getScore();
         int savedMax = game_.getMaxScore(game_.getCurrentMode());
         if (curScore > savedMax) {
             game_.setMaxScore(game_.getCurrentMode(), curScore);
             saveChallengeScore((int)game_.getCurrentMode(), curScore);
         }
+
+        int stars = game_.getChallengeStars(game_.getCurrentMode());
+
+        // ==========================================
+        // ★ 使用 JNI 调用 Kotlin 的通关弹窗方法 ★
+        // ==========================================
+        JNIEnv *env;
+        bool needsDetach = false;
+
+        // 1. 获取 JNI 环境
+        if (app_->activity->vm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+            if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return; // 注意这里我也加上了你的判空防御
+            needsDetach = true;
+        }
+
+        // 2. 获取 GameActivity 对象 (修复了报错的地方)
+        jobject activityObj = app_->activity->javaGameActivity;
+        jclass clazz = env->GetObjectClass(activityObj);
+
+        // 3. 找到你的 Kotlin 方法
+        jmethodID method = env->GetMethodID(clazz, "showChallengeClearDialog", "(II)V");
+
+        // 4. 发起调用，传入星星和分数
+        if (method) {
+            env->CallVoidMethod(activityObj, method, (jint)stars, (jint)curScore);
+        }
+
+        // 5. 异常清理与释放
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(clazz); // 释放局部引用是个好习惯
+        if (needsDetach) app_->activity->vm->DetachCurrentThread();
+        // ==========================================
     }
     if (renderState == GameState::START_SCREEN) {
         if (startBackgroundTextureId_) {
@@ -1774,44 +1808,8 @@ void Renderer::render() {
 
         drawButton(26.0f, 16.5f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
     }
-    if (currentState == GameState::CHALLENGE_CLEAR) {
-        // 绘制半透明黑色遮罩
-        drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 0.0f, 0.0f, 0.0f, 0.6f);
-
-        // 【修改】：稍微拉高弹窗高度，以容纳星星
-        // 【美化】：使用类似于设置界面的深蓝黑高级弹窗质感
-        float boxW = 22.0f;
-        float boxH = 28.0f;
-        // 边框发光
-        drawShape(0, 0, boxW + 0.6f, boxH + 0.6f, 0.3f, 0.4f, 0.6f, 0.8f, false, 0.1f);
-        // 内底色
-        drawShape(0, 0, boxW, boxH, 0.1f, 0.12f, 0.18f, 0.95f, false, 0.1f);
-
-        auto& vTex = textTextures_["victory"];
-        float titleW = 12.0f;
-        float titleH = titleW * (vTex.height / vTex.width);
-        // 标题上移，为星星留出空间
-        drawShape(0, 9.5f, titleW, titleH, 1.0f, 0.9f, 0.2f, 1.0f, false, 0.0f, vTex.id);
-
-        // 绘制本次获得的星星 (居中显示在标题下方，稍微放大并拉开间距)
-        int stars = game_.getChallengeStars(game_.getCurrentMode());
-        for (int i = 0; i < 3; i++) {
-            float sx = (i - 1) * 5.0f;
-            if (i < stars) {
-                drawShape(sx, 4.0f, 4.5f, 4.5f, 1.0f, 0.9f, 0.1f, 1.0f, false, 0.0f, 0, false, false, 0.0f, true);
-            } else {
-                drawShape(sx, 4.0f, 4.5f, 4.5f, 0.3f, 0.3f, 0.3f, 1.0f, false, 0.0f, 0, false, false, 0.0f, true);
-            }
-        }
-
-        // 按钮重新排版并调整高级感配色
-        if (game_.getCurrentMode() != GameMode::CHALLENGE_3) {
-            drawButton(0, -2.5f, 14.0f, 4.0f, 0.2f, 0.6f, 1.0f, true, "next_level"); // 科技蓝
-        }
-        drawButton(0, -8.0f, 14.0f, 4.0f, 0.8f, 0.5f, 0.1f, true, "retry");        // 活力橙
-        drawButton(0, -13.5f, 14.0f, 4.0f, 0.9f, 0.2f, 0.2f, true, "main_menu");   // 警示红
-    }
     eglSwapBuffers(display_, surface_);
+
 }
 
 void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a, bool isCircle, float radius, GLuint textureId, bool isGear, bool isLightning, float rotation, bool isStar)  {
@@ -2039,23 +2037,8 @@ void Renderer::handleInput() {
                     }
                 }
             }
-            else if (game_.getState() == GameState::CHALLENGE_CLEAR) {
-                if (abs(nx) < 7.0f) {
-                    if (abs(ny - 1.0f) < 2.0f && game_.getCurrentMode() != GameMode::CHALLENGE_3) {
-                        playSfx(2);
-                        if (game_.getCurrentMode() == GameMode::CHALLENGE_1) game_.startChallengeLevel2();
-                        else if (game_.getCurrentMode() == GameMode::CHALLENGE_2) game_.startChallengeLevel3();
-                    } else if (abs(ny + 4.5f) < 2.0f) {
-                        playSfx(2);
-                        if (game_.getCurrentMode() == GameMode::CHALLENGE_1) game_.startChallengeLevel1();
-                        else if (game_.getCurrentMode() == GameMode::CHALLENGE_2) game_.startChallengeLevel2();
-                        else if (game_.getCurrentMode() == GameMode::CHALLENGE_3) game_.startChallengeLevel3();
-                    } else if (abs(ny + 10.0f) < 2.0f) {
-                        playSfx(2);
-                        game_.setState(GameState::CHALLENGE_SELECTION);
-                    }
-                }
-            }
+
+
             else if (game_.getState() == GameState::PLAYING) {
                 if (game_.isEndlessArenaMode() && hitEndlessRankPanel(nx, ny)) {
                     rankingPanelExpanded_ = !rankingPanelExpanded_;
