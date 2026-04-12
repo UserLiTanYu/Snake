@@ -2,6 +2,7 @@
 #define NEON_SNAKE_GAME_H
 
 #include <vector>
+#include <string>
 #include <random>
 #include <chrono>
 #include <cmath>
@@ -9,6 +10,7 @@
 enum class GameState {
     START_SCREEN,
     MODE_SELECTION,
+    MENU_SETTINGS,
     PLAYING,
     PAUSED,
     STORE,
@@ -51,9 +53,17 @@ struct AISnake {
     int score = 0;
     float pendingGrowth = 0.0f;
     float wanderTimer = 0.0f;
+    std::string displayName;
 };
 
 struct RankEntry {
+    int length = 0;
+    bool isPlayer = false;
+    int aiIndex = -1;
+};
+
+struct RankPanelRow {
+    int rank = 0;
     int length = 0;
     bool isPlayer = false;
     int aiIndex = -1;
@@ -79,6 +89,7 @@ public:
     const std::vector<Food>& getFoods() const { return foods_; }
     const std::vector<PowerUp>& getPowerUps() const { return powerUps_; }
     int getScore() const { return score_; }
+    int getPlayerKillCount() const { return playerKillCount_; }
     GameState getState() const { return state_; }
     void setState(GameState s) { state_ = s; }
     void startGame() { state_ = GameState::PLAYING; }
@@ -88,7 +99,7 @@ public:
     float getWorldHeight() const { return worldHeight_; }
 
     std::vector<RankEntry> getLengthLeaderboard() const;
-    int getTotalSnakeCount() const { return 1 + static_cast<int>(aiSnakes_.size()); }
+    std::vector<RankPanelRow> getRankPanelRows() const;
 
 private:
     void spawnFood();
@@ -121,6 +132,7 @@ private:
     float aiSpawnTimer_ = 0.0f;
 
     int score_;
+    int playerKillCount_ = 0;
     GameState state_;
 
     int equippedSkin_ = 0;

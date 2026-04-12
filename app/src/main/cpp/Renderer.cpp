@@ -32,6 +32,16 @@ Java_com_example_snake_MainActivity_nativeIsAtMainMenu(JNIEnv *env, jobject thiz
     return JNI_FALSE;
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_example_snake_MainActivity_nativeTryCloseMenuOverlay(JNIEnv *env, jobject thiz) {
+    (void)env; (void)thiz;
+    if (gRenderer && gRenderer->getGameState() == GameState::MENU_SETTINGS) {
+        gRenderer->closeMenuSettings();
+        return JNI_TRUE;
+    }
+    return JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL
 Java_com_example_snake_MainActivity_nativeRestartGame(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
@@ -84,8 +94,9 @@ void main() {
         vec4 texColor = texture(uTexture, correctedUV);
         texColor = texColor.bgra;
 
-        if (uColor.r > 0.99 && uColor.g > 0.99 && uColor.b > 0.99 && uColor.a > 0.99) {
-            outColor = texColor;
+        bool noRgbTint = uColor.r > 0.99 && uColor.g > 0.99 && uColor.b > 0.99;
+        if (noRgbTint) {
+            outColor = vec4(texColor.rgb, texColor.a * min(uColor.a, 1.0));
         } else {
             outColor = vec4(uColor.rgb, min(uColor.a, 1.0) * texColor.a);
         }
@@ -135,8 +146,6 @@ Renderer::Renderer(android_app *pApp) :
 
     for(int i=0; i<=19; i++) { skinTex_[i] = 0; }
     dynamicCoinText_.id = 0;
-    endlessSnakeCountTex_.id = 0;
-
     gRenderer = this;
     initRenderer();
     loadTextTextures();
@@ -167,6 +176,8 @@ Renderer::Renderer(android_app *pApp) :
 Renderer::~Renderer() {
     if (gRenderer == this) gRenderer = nullptr;
     clearRankPanelCache();
+    releaseRankPlayerStatTextures();
+    releaseHeadNameTexCache();
     if (startBackgroundTextureId_) glDeleteTextures(1, &startBackgroundTextureId_);
     if (gameBackgroundTextureId_) glDeleteTextures(1, &gameBackgroundTextureId_);
     if (playingBackgroundTextureId_) glDeleteTextures(1, &playingBackgroundTextureId_);
@@ -177,7 +188,6 @@ Renderer::~Renderer() {
         if(skinTex_[i]) glDeleteTextures(1, &skinTex_[i]);
     }
     if (dynamicCoinText_.id) glDeleteTextures(1, &dynamicCoinText_.id);
-    if (endlessSnakeCountTex_.id) glDeleteTextures(1, &endlessSnakeCountTex_.id);
     for (auto& pair : textTextures_) glDeleteTextures(1, &pair.second.id);
 }
 
@@ -298,6 +308,279 @@ TextTexture Renderer::createTextTexture(const std::string& text, int fontSize) {
     return tex;
 }
 
+TextTexture Renderer::createTextTextureColored(const std::string& text, int fontSize, int argb) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        app_->activity->vm->AttachCurrentThread(&env, nullptr);
+        needsDetach = true;
+    }
+
+    jstring jstr = env->NewStringUTF(text.c_str());
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID method = env->GetMethodID(clazz, "getTextPixelsColored", "(Ljava/lang/String;II)[I");
+
+    TextTexture tex{};
+    if (method && jstr) {
+        jintArray pixelArray = (jintArray)env->CallObjectMethod(activityObj, method, jstr, (jint)fontSize, (jint)argb);
+        if (pixelArray && !env->ExceptionCheck()) {
+            jint* pixels = env->GetIntArrayElements(pixelArray, nullptr);
+            if (pixels) {
+                int texW = pixels[0];
+                int texH = pixels[1];
+                if (texW >= 1 && texH >= 1) {
+                tex.width = (float)texW / 10.0f;
+                tex.height = (float)texH / 10.0f;
+                glGenTextures(1, &tex.id);
+                glBindTexture(GL_TEXTURE_2D, tex.id);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[2]);
+                }
+                env->ReleaseIntArrayElements(pixelArray, pixels, JNI_ABORT);
+            }
+            env->DeleteLocalRef(pixelArray);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    env->DeleteLocalRef(jstr);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+    return tex;
+}
+
+TextTexture Renderer::createTextTextureLeft(const std::string& text, int fontSize) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        app_->activity->vm->AttachCurrentThread(&env, nullptr);
+        needsDetach = true;
+    }
+
+    jstring jstr = env->NewStringUTF(text.c_str());
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID method = env->GetMethodID(clazz, "getTextPixelsLeft", "(Ljava/lang/String;I)[I");
+
+    TextTexture tex{};
+    if (method && jstr) {
+        jintArray pixelArray = (jintArray)env->CallObjectMethod(activityObj, method, jstr, (jint)fontSize);
+        if (pixelArray && !env->ExceptionCheck()) {
+            jint* pixels = env->GetIntArrayElements(pixelArray, nullptr);
+            if (pixels) {
+                int texW = pixels[0];
+                int texH = pixels[1];
+                if (texW >= 1 && texH >= 1) {
+                    tex.width = (float)texW / 10.0f;
+                    tex.height = (float)texH / 10.0f;
+                    glGenTextures(1, &tex.id);
+                    glBindTexture(GL_TEXTURE_2D, tex.id);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[2]);
+                }
+                env->ReleaseIntArrayElements(pixelArray, pixels, JNI_ABORT);
+            }
+            env->DeleteLocalRef(pixelArray);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    env->DeleteLocalRef(jstr);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+    return tex;
+}
+
+TextTexture Renderer::createTextTextureColoredLeft(const std::string& text, int fontSize, int argb) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        app_->activity->vm->AttachCurrentThread(&env, nullptr);
+        needsDetach = true;
+    }
+
+    jstring jstr = env->NewStringUTF(text.c_str());
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID method = env->GetMethodID(clazz, "getTextPixelsColoredLeft", "(Ljava/lang/String;II)[I");
+
+    TextTexture tex{};
+    if (method && jstr) {
+        jintArray pixelArray = (jintArray)env->CallObjectMethod(activityObj, method, jstr, (jint)fontSize, (jint)argb);
+        if (pixelArray && !env->ExceptionCheck()) {
+            jint* pixels = env->GetIntArrayElements(pixelArray, nullptr);
+            if (pixels) {
+                int texW = pixels[0];
+                int texH = pixels[1];
+                if (texW >= 1 && texH >= 1) {
+                    tex.width = (float)texW / 10.0f;
+                    tex.height = (float)texH / 10.0f;
+                    glGenTextures(1, &tex.id);
+                    glBindTexture(GL_TEXTURE_2D, tex.id);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[2]);
+                }
+                env->ReleaseIntArrayElements(pixelArray, pixels, JNI_ABORT);
+            }
+            env->DeleteLocalRef(pixelArray);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    env->DeleteLocalRef(jstr);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+    return tex;
+}
+
+TextTexture Renderer::createTextTextureRight(const std::string& text, int fontSize) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        app_->activity->vm->AttachCurrentThread(&env, nullptr);
+        needsDetach = true;
+    }
+
+    jstring jstr = env->NewStringUTF(text.c_str());
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID method = env->GetMethodID(clazz, "getTextPixelsRight", "(Ljava/lang/String;I)[I");
+
+    TextTexture tex{};
+    if (method && jstr) {
+        jintArray pixelArray = (jintArray)env->CallObjectMethod(activityObj, method, jstr, (jint)fontSize);
+        if (pixelArray && !env->ExceptionCheck()) {
+            jint* pixels = env->GetIntArrayElements(pixelArray, nullptr);
+            if (pixels) {
+                int texW = pixels[0];
+                int texH = pixels[1];
+                if (texW >= 1 && texH >= 1) {
+                    tex.width = (float)texW / 10.0f;
+                    tex.height = (float)texH / 10.0f;
+                    glGenTextures(1, &tex.id);
+                    glBindTexture(GL_TEXTURE_2D, tex.id);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[2]);
+                }
+                env->ReleaseIntArrayElements(pixelArray, pixels, JNI_ABORT);
+            }
+            env->DeleteLocalRef(pixelArray);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    env->DeleteLocalRef(jstr);
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+    return tex;
+}
+
+std::string Renderer::fetchPlayerDisplayName() {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return "玩家";
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID mid = env->GetMethodID(clazz, "getPlayerDisplayName", "()Ljava/lang/String;");
+    std::string out = "玩家";
+    if (mid) {
+        jstring js = (jstring)env->CallObjectMethod(activityObj, mid);
+        if (js && !env->ExceptionCheck()) {
+            const char* utf = env->GetStringUTFChars(js, nullptr);
+            if (utf) {
+                out = utf;
+                env->ReleaseStringUTFChars(js, utf);
+            }
+            env->DeleteLocalRef(js);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+    return out;
+}
+
+void Renderer::showPlayerNameEditorDialog() {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return;
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID mid = env->GetMethodID(clazz, "showPlayerNameEditor", "()V");
+    if (mid) env->CallVoidMethod(activityObj, mid);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+}
+
+bool Renderer::fetchShowSnakeHeadNames() {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return false;
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID mid = env->GetMethodID(clazz, "isShowSnakeHeadNames", "()Z");
+    jboolean out = JNI_FALSE;
+    if (mid) out = env->CallBooleanMethod(activityObj, mid);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        out = JNI_FALSE;
+    }
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+    return out == JNI_TRUE;
+}
+
+void Renderer::setShowSnakeHeadNames(bool enabled) {
+    JNIEnv *env;
+    bool needsDetach = false;
+    if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) {
+        if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return;
+        needsDetach = true;
+    }
+    jobject activityObj = app_->activity->javaGameActivity;
+    jclass clazz = env->GetObjectClass(activityObj);
+    jmethodID mid = env->GetMethodID(clazz, "setShowSnakeHeadNames", "(Z)V");
+    if (mid) env->CallVoidMethod(activityObj, mid, enabled ? JNI_TRUE : JNI_FALSE);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (needsDetach) app_->activity->vm->DetachCurrentThread();
+}
+
+void Renderer::releaseHeadNameTexCache() {
+    for (auto& kv : headNameTexCache_) {
+        if (kv.second.id) glDeleteTextures(1, &kv.second.id);
+    }
+    headNameTexCache_.clear();
+}
+
+TextTexture Renderer::getOrCreateHeadNameTexture(const std::string& name) {
+    auto it = headNameTexCache_.find(name);
+    if (it != headNameTexCache_.end()) return it->second;
+    TextTexture t = createTextTexture(name, 17);
+    headNameTexCache_[name] = t;
+    return t;
+}
+
+void Renderer::drawSnakeHeadNameLabel(float wx, float wy, float headRadius, const std::string& name) {
+    if (name.empty()) return;
+    TextTexture tt = getOrCreateHeadNameTexture(name);
+    if (!tt.id) return;
+    float tw = std::min(10.0f, tt.width);
+    float safeW = std::max(tt.width, 0.01f);
+    float th = tw * (tt.height / safeW);
+    float labelY = wy + headRadius * 1.2f + th * 0.5f;
+    drawShape(wx, labelY, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tt.id);
+}
+
+void Renderer::closeMenuSettings() {
+    if (game_.getState() != GameState::MENU_SETTINGS) return;
+    game_.setState(menuSettingsReturnState_);
+    playSfx(2);
+}
+
 void Renderer::loadTextTextures() {
     textTextures_["start"] = createTextTexture("开始游戏", 50);
     textTextures_["endless"] = createTextTexture("无尽模式", 40);
@@ -352,12 +635,94 @@ void Renderer::loadTextTextures() {
     textTextures_["skin_18"] = createTextTexture("暗星空", 25);
     textTextures_["skin_19"] = createTextTexture("纯金球", 25);
 
-    textTextures_["rank_title"] = createTextTexture("实时长度·前五", 22);
-    textTextures_["rank_fold"] = createTextTexture("点击收起", 18);
-    textTextures_["rank_expand"] = createTextTexture("排行 展开", 20);
+    textTextures_["rank_title"] = createTextTexture("实时排行·前9", 16);
+    textTextures_["rank_fold"] = createTextTexture("点击收起", 13);
+    textTextures_["rank_expand"] = createTextTexture("排行 展开", 14);
+    textTextures_["edit_name"] = createTextTexture("修改昵称", 34);
+    textTextures_["menu_settings_btn"] = createTextTexture("设置", 36);
+    textTextures_["menu_page_settings_title"] = createTextTexture("主页设置", 44);
+    textTextures_["head_names_on"] = createTextTexture("显示蛇头名字: 开", 32);
+    textTextures_["head_names_off"] = createTextTexture("显示蛇头名字: 关", 32);
+    textTextures_["settings_back"] = createTextTexture("返回", 36);
 }
 
 namespace {
+const char* utf8RankMedalPrefix(int rank) {
+    switch (rank) {
+        case 1: return "\xf0\x9f\x91\x91 ";  // crown
+        case 2: return "\xf0\x9f\xa5\x88 "; // silver medal
+        case 3: return "\xf0\x9f\xa5\x89 "; // bronze medal
+        default: return "";
+    }
+}
+
+constexpr float kSnakeHeadDrawDiam = 1.5f;
+constexpr float kSnakeBodyDrawDiam = 1.1f;
+
+inline float snakeSegmentDrawSize(float baseCurSize, bool isHead) {
+    const float unit = baseCurSize / kSnakeBodyDrawDiam;
+    return unit * (isHead ? kSnakeHeadDrawDiam : kSnakeBodyDrawDiam);
+}
+
+size_t utf8CodepointCount(const std::string& s) {
+    size_t n = 0;
+    for (size_t i = 0; i < s.size(); ) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        size_t charLen = 1;
+        if ((c & 0x80) == 0) {
+            charLen = 1;
+        } else if ((c & 0xE0) == 0xC0) {
+            charLen = 2;
+        } else if ((c & 0xF0) == 0xE0) {
+            charLen = 3;
+        } else if ((c & 0xF8) == 0xF0) {
+            charLen = 4;
+        } else {
+            ++i;
+            continue;
+        }
+        if (i + charLen > s.size()) break;
+        i += charLen;
+        ++n;
+    }
+    return n;
+}
+
+std::string utf8PrefixCodepoints(const std::string& s, size_t maxCp) {
+    if (maxCp == 0) return {};
+    size_t count = 0;
+    size_t end = 0;
+    for (size_t i = 0; i < s.size(); ) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        size_t charLen = 1;
+        if ((c & 0x80) == 0) {
+            charLen = 1;
+        } else if ((c & 0xE0) == 0xC0) {
+            charLen = 2;
+        } else if ((c & 0xF0) == 0xE0) {
+            charLen = 3;
+        } else if ((c & 0xF8) == 0xF0) {
+            charLen = 4;
+        } else {
+            ++i;
+            continue;
+        }
+        if (i + charLen > s.size()) break;
+        if (count >= maxCp) break;
+        end = i + charLen;
+        i += charLen;
+        ++count;
+    }
+    return s.substr(0, end);
+}
+
+std::string ellipsisRankDisplayName(const std::string& name, size_t maxCp) {
+    const std::string ell = u8"\u2026";
+    if (utf8CodepointCount(name) <= maxCp) return name;
+    if (maxCp == 0) return ell;
+    return utf8PrefixCodepoints(name, maxCp - 1) + ell;
+}
+
 void aiPaletteRgb(int paletteId, float& r, float& g, float& b) {
     switch (paletteId % 6) {
         case 0: r = 0.25f; g = 0.85f; b = 1.0f; break;
@@ -372,30 +737,34 @@ void aiPaletteRgb(int paletteId, float& r, float& g, float& b) {
 }
 
 void Renderer::releaseRankLineTextures() {
-    for (auto& t : rankLineTextures_) {
+    for (auto& t : rankLineLeftTextures_) {
         if (t.id) glDeleteTextures(1, &t.id);
     }
-    rankLineTextures_.clear();
+    rankLineLeftTextures_.clear();
+    for (auto& t : rankLineLenTextures_) {
+        if (t.id) glDeleteTextures(1, &t.id);
+    }
+    rankLineLenTextures_.clear();
 }
 
 void Renderer::clearRankPanelCache() {
     releaseRankLineTextures();
     rankSignature_.clear();
-    if (endlessSnakeCountTex_.id) {
-        glDeleteTextures(1, &endlessSnakeCountTex_.id);
-        endlessSnakeCountTex_.id = 0;
-    }
-    lastEndlessSnakeTotal_ = -1;
 }
 
 void Renderer::syncRankPanelTextures() {
     if (!game_.isEndlessArenaMode()) return;
-    auto board = game_.getLengthLeaderboard();
-    constexpr size_t kRankTopN = 5;
-    if (board.size() > kRankTopN) board.resize(kRankTopN);
+    auto rows = game_.getRankPanelRows();
+    std::string pname = fetchPlayerDisplayName();
+    const auto& ais = game_.getAISnakes();
+
     std::vector<int> sig;
-    sig.reserve(board.size() * 3);
-    for (const auto& row : board) {
+    sig.reserve(rows.size() * 5 + static_cast<int>(pname.size()) + 4);
+    for (unsigned char c : pname) sig.push_back(static_cast<int>(c));
+    sig.push_back(-4242);
+    sig.push_back(5);
+    for (const auto& row : rows) {
+        sig.push_back(row.rank);
         sig.push_back(row.length);
         sig.push_back(row.isPlayer ? 1 : 0);
         sig.push_back(row.aiIndex);
@@ -403,14 +772,84 @@ void Renderer::syncRankPanelTextures() {
     if (sig == rankSignature_) return;
     releaseRankLineTextures();
     rankSignature_ = std::move(sig);
-    rankLineTextures_.reserve(board.size());
-    for (size_t i = 0; i < board.size(); ++i) {
-        std::string line = std::to_string(i + 1) + ". ";
-        if (board[i].isPlayer) line += "你 ";
-        else line += std::string("电脑") + static_cast<char>('A' + board[i].aiIndex) + " ";
-        line += std::to_string(board[i].length);
-        rankLineTextures_.push_back(createTextTexture(line, 24));
+
+    constexpr int kPlayerGoldArgb = 0xFFFFD54A;
+    constexpr int kRankLineFont = 17;
+    constexpr size_t kRankNameMaxCp = 8;
+    rankLineLeftTextures_.reserve(rows.size());
+    rankLineLenTextures_.reserve(rows.size());
+    for (const auto& row : rows) {
+        std::string name;
+        if (row.isPlayer) {
+            name = pname;
+        } else if (row.aiIndex >= 0 && static_cast<size_t>(row.aiIndex) < ais.size()) {
+            name = ais[static_cast<size_t>(row.aiIndex)].displayName;
+        }
+        if (name.empty()) name = row.isPlayer ? "玩家" : "?";
+        std::string shortName = ellipsisRankDisplayName(name, kRankNameMaxCp);
+        std::string leftLine = std::to_string(row.rank) + ". " + std::string(utf8RankMedalPrefix(row.rank)) + shortName;
+        std::string lenStr = std::to_string(row.length);
+        TextTexture lenTex = createTextTextureRight(lenStr, kRankLineFont);
+        if (lenTex.id == 0) lenTex = createTextTextureLeft(lenStr, kRankLineFont);
+        rankLineLenTextures_.push_back(lenTex);
+
+        if (row.isPlayer) {
+            TextTexture tt = createTextTextureColoredLeft(leftLine, kRankLineFont, kPlayerGoldArgb);
+            if (tt.id == 0) tt = createTextTextureLeft(leftLine, kRankLineFont);
+            if (tt.id == 0) tt = createTextTextureColored(leftLine, kRankLineFont, kPlayerGoldArgb);
+            if (tt.id == 0) tt = createTextTexture(leftLine, kRankLineFont);
+            rankLineLeftTextures_.push_back(tt);
+        } else {
+            TextTexture tt = createTextTextureLeft(leftLine, kRankLineFont);
+            if (tt.id == 0) tt = createTextTexture(leftLine, kRankLineFont);
+            rankLineLeftTextures_.push_back(tt);
+        }
     }
+}
+
+void Renderer::releaseRankPlayerStatTextures() {
+    if (rankPlayerLenTex_.id) {
+        glDeleteTextures(1, &rankPlayerLenTex_.id);
+        rankPlayerLenTex_ = {};
+    }
+    if (rankPlayerScoreTex_.id) {
+        glDeleteTextures(1, &rankPlayerScoreTex_.id);
+        rankPlayerScoreTex_ = {};
+    }
+    if (rankPlayerKillsTex_.id) {
+        glDeleteTextures(1, &rankPlayerKillsTex_.id);
+        rankPlayerKillsTex_ = {};
+    }
+    rankPlayerStatCacheLen_ = -1;
+    rankPlayerStatCacheScore_ = -1;
+    rankPlayerStatCacheKills_ = -1;
+}
+
+void Renderer::syncRankPlayerStatTextures() {
+    if (!game_.isEndlessArenaMode()) return;
+    int len = static_cast<int>(game_.getSnake().size());
+    int score = game_.getScore();
+    int kills = game_.getPlayerKillCount();
+    if (len == rankPlayerStatCacheLen_ && score == rankPlayerStatCacheScore_ && kills == rankPlayerStatCacheKills_) return;
+    rankPlayerStatCacheLen_ = len;
+    rankPlayerStatCacheScore_ = score;
+    rankPlayerStatCacheKills_ = kills;
+    if (rankPlayerLenTex_.id) glDeleteTextures(1, &rankPlayerLenTex_.id);
+    if (rankPlayerScoreTex_.id) glDeleteTextures(1, &rankPlayerScoreTex_.id);
+    if (rankPlayerKillsTex_.id) glDeleteTextures(1, &rankPlayerKillsTex_.id);
+    rankPlayerLenTex_ = {};
+    rankPlayerScoreTex_ = {};
+    rankPlayerKillsTex_ = {};
+    std::string lenLine = std::string(u8"\u957f\u5ea6 ") + std::to_string(len);
+    std::string scoreLine = std::string(u8"\u79ef\u5206 ") + std::to_string(score);
+    std::string killsLine = std::string(u8"\u51fb\u6740 ") + std::to_string(kills);
+    constexpr int kYellowArgb = 0xFFFFFF00;
+    rankPlayerLenTex_ = createTextTextureColored(lenLine, 14, kYellowArgb);
+    if (rankPlayerLenTex_.id == 0) rankPlayerLenTex_ = createTextTexture(lenLine, 14);
+    rankPlayerScoreTex_ = createTextTextureColored(scoreLine, 14, kYellowArgb);
+    if (rankPlayerScoreTex_.id == 0) rankPlayerScoreTex_ = createTextTexture(scoreLine, 14);
+    rankPlayerKillsTex_ = createTextTextureColored(killsLine, 14, kYellowArgb);
+    if (rankPlayerKillsTex_.id == 0) rankPlayerKillsTex_ = createTextTexture(killsLine, 14);
 }
 
 void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
@@ -421,17 +860,36 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     const float topY = kProjectionHalfHeight - 2.2f;
 
     if (!rankingPanelExpanded_) {
-        const float barW = 14.0f;
-        const float barH = 3.0f;
+        const float barW = 10.5f;
+        const float barH = 2.35f;
         const float cx = left + barW * 0.5f;
         const float cy = topY - barH * 0.5f;
-        drawShape(cx, cy, barW + 0.4f, barH + 0.4f, 0.15f, 0.75f, 1.0f, 0.22f, false, 0.14f);
-        drawShape(cx, cy, barW, barH, 0.05f, 0.07f, 0.14f, 0.9f, false, 0.12f);
+        drawShape(cx, cy, barW + 0.3f, barH + 0.3f, 0.15f, 0.75f, 1.0f, 0.10f, false, 0.11f);
+        drawShape(cx, cy, barW, barH, 0.05f, 0.07f, 0.14f, 0.18f, false, 0.10f);
         if (textTextures_.count("rank_expand")) {
             auto& tex = textTextures_["rank_expand"];
-            float tw = std::min(12.5f, tex.width);
+            float tw = std::min(9.5f, tex.width);
             float th = tw * (tex.height / tex.width);
             drawShape(cx, cy, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
+        }
+        syncRankPlayerStatTextures();
+        if (rankPlayerLenTex_.id && rankPlayerScoreTex_.id && rankPlayerKillsTex_.id) {
+            const float margin = 0.22f;
+            const float panelRight = left + barW;
+            float tw1 = std::min(7.8f, rankPlayerLenTex_.width);
+            float th1 = tw1 * (rankPlayerLenTex_.height / std::max(rankPlayerLenTex_.width, 0.01f));
+            float tw2 = std::min(7.8f, rankPlayerScoreTex_.width);
+            float th2 = tw2 * (rankPlayerScoreTex_.height / std::max(rankPlayerScoreTex_.width, 0.01f));
+            float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
+            float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
+            float twMax = std::max(tw1, std::max(tw2, tw3));
+            float statCx = panelRight + margin + twMax * 0.5f;
+            float yLen = cy + 0.52f;
+            float yScore = cy;
+            float yKills = cy - 0.52f;
+            drawShape(statCx, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
+            drawShape(statCx, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
+            drawShape(statCx, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
         }
         rankPanelHitL_ = left;
         rankPanelHitR_ = left + barW;
@@ -440,47 +898,54 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
         return;
     }
 
-    const float padX = 0.55f;
-    const float padY = 0.5f;
-    const float gapTitle = 0.45f;
-    const float lineSpacing = 0.65f;
-    const float gapHint = 0.4f;
+    const float padX = 0.38f;
+    const float padY = 0.35f;
+    const float gapTitle = 0.32f;
+    const float lineSpacing = 0.48f;
+    const float gapHint = 0.28f;
 
     float maxW = 0.0f;
     float titleTw = 0.0f;
     float titleTh = 0.0f;
     if (textTextures_.count("rank_title")) {
         auto& title = textTextures_["rank_title"];
-        titleTw = std::min(11.0f, title.width);
+        titleTw = std::min(9.5f, title.width);
         titleTh = titleTw * (title.height / title.width);
         maxW = std::max(maxW, titleTw);
     }
 
-    std::vector<float> lineWs;
-    std::vector<float> lineHs;
-    lineWs.reserve(rankLineTextures_.size());
-    lineHs.reserve(rankLineTextures_.size());
-    for (const auto& rt : rankLineTextures_) {
-        float lw = std::min(12.5f, rt.width);
-        float lh = lw * (rt.height / rt.width);
-        lineWs.push_back(lw);
-        lineHs.push_back(lh);
-        maxW = std::max(maxW, lw);
+    constexpr float kRankMidGap = 0.32f;
+    constexpr float kRankLeftCap = 9.2f;
+    constexpr float kRankLenCap = 2.9f;
+
+    std::vector<float> rowHs;
+    rowHs.reserve(rankLineLeftTextures_.size());
+    float maxRankRowInnerW = 0.0f;
+    for (size_t i = 0; i < rankLineLeftTextures_.size(); ++i) {
+        const auto& lt = rankLineLeftTextures_[i];
+        const auto& rtex = rankLineLenTextures_[i];
+        float lw = std::min(kRankLeftCap, lt.width);
+        float lh = lw * (lt.height / std::max(lt.width, 0.01f));
+        float rw = std::min(kRankLenCap, rtex.width);
+        float rh = rw * (rtex.height / std::max(rtex.width, 0.01f));
+        maxRankRowInnerW = std::max(maxRankRowInnerW, lw + kRankMidGap + rw);
+        rowHs.push_back(std::max(lh, rh));
     }
+    maxW = std::max(maxW, maxRankRowInnerW);
 
     float hintW = 0.0f;
     float hintH = 0.0f;
     if (textTextures_.count("rank_fold")) {
         auto& hint = textTextures_["rank_fold"];
-        hintW = std::min(10.0f, hint.width);
+        hintW = std::min(7.5f, hint.width);
         hintH = hintW * (hint.height / hint.width);
         maxW = std::max(maxW, hintW);
     }
 
     float innerContentH = titleTh + gapTitle;
-    for (size_t i = 0; i < lineHs.size(); ++i) {
-        innerContentH += lineHs[i];
-        if (i + 1 < lineHs.size()) innerContentH += lineSpacing;
+    for (size_t i = 0; i < rowHs.size(); ++i) {
+        innerContentH += rowHs[i];
+        if (i + 1 < rowHs.size()) innerContentH += lineSpacing;
     }
     innerContentH += gapHint + hintH;
 
@@ -489,8 +954,8 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     const float cx = left + panelW * 0.5f;
     const float cy = topY - panelH * 0.5f;
 
-    drawShape(cx, cy, panelW + 0.5f, panelH + 0.5f, 0.2f, 0.85f, 1.0f, 0.28f, false, 0.14f);
-    drawShape(cx, cy, panelW, panelH, 0.04f, 0.06f, 0.12f, 0.9f, false, 0.11f);
+    drawShape(cx, cy, panelW + 0.35f, panelH + 0.35f, 0.2f, 0.85f, 1.0f, 0.08f, false, 0.11f);
+    drawShape(cx, cy, panelW, panelH, 0.04f, 0.06f, 0.12f, 0.14f, false, 0.09f);
 
     const float innerTop = topY - padY;
     float yNextTop = innerTop - titleTh - gapTitle;
@@ -499,17 +964,51 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
         drawShape(cx, yTitleC, titleTw, titleTh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["rank_title"].id);
     }
 
-    for (size_t i = 0; i < lineHs.size(); ++i) {
-        float yc = yNextTop - lineHs[i] * 0.5f;
-        drawShape(cx, yc, lineWs[i], lineHs[i], 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, rankLineTextures_[i].id);
-        yNextTop -= lineHs[i];
-        if (i + 1 < lineHs.size()) yNextTop -= lineSpacing;
+    const float innerL = left + padX;
+    const float innerR = left + panelW - padX;
+    for (size_t i = 0; i < rankLineLeftTextures_.size(); ++i) {
+        const auto& lt = rankLineLeftTextures_[i];
+        const auto& rtex = rankLineLenTextures_[i];
+        float lw = std::min(kRankLeftCap, lt.width);
+        float lh = lw * (lt.height / std::max(lt.width, 0.01f));
+        float rw = std::min(kRankLenCap, rtex.width);
+        float rh = rw * (rtex.height / std::max(rtex.width, 0.01f));
+        float rowH = rowHs[i];
+        float yc = yNextTop - rowH * 0.5f;
+        if (lt.id) {
+            drawShape(innerL + lw * 0.5f, yc, lw, lh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, lt.id);
+        }
+        if (rtex.id) {
+            drawShape(innerR - rw * 0.5f, yc, rw, rh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, rtex.id);
+        }
+        yNextTop -= rowH;
+        if (i + 1 < rowHs.size()) yNextTop -= lineSpacing;
     }
 
     yNextTop -= gapHint;
     if (textTextures_.count("rank_fold") && hintH > 0.0f) {
         float yHintC = yNextTop - hintH * 0.5f;
-        drawShape(cx, yHintC, hintW, hintH, 0.7f, 0.85f, 1.0f, 0.95f, false, 0.0f, textTextures_["rank_fold"].id);
+        drawShape(cx, yHintC, hintW, hintH, 0.7f, 0.85f, 1.0f, 0.55f, false, 0.0f, textTextures_["rank_fold"].id);
+    }
+
+    syncRankPlayerStatTextures();
+    if (rankPlayerLenTex_.id && rankPlayerScoreTex_.id && rankPlayerKillsTex_.id) {
+        const float margin = 0.22f;
+        const float panelRight = left + panelW;
+        float tw1 = std::min(7.8f, rankPlayerLenTex_.width);
+        float th1 = tw1 * (rankPlayerLenTex_.height / std::max(rankPlayerLenTex_.width, 0.01f));
+        float tw2 = std::min(7.8f, rankPlayerScoreTex_.width);
+        float th2 = tw2 * (rankPlayerScoreTex_.height / std::max(rankPlayerScoreTex_.width, 0.01f));
+        float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
+        float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
+        float twMax = std::max(tw1, std::max(tw2, tw3));
+        float statCx = panelRight + margin + twMax * 0.5f;
+        float yLen = innerTop - th1 * 0.5f;
+        float yScore = yLen - th1 * 0.5f - 0.05f - th2 * 0.5f;
+        float yKills = yScore - th2 * 0.5f - 0.05f - th3 * 0.5f;
+        drawShape(statCx, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
+        drawShape(statCx, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
+        drawShape(statCx, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
     }
 
     rankPanelHitL_ = left;
@@ -644,7 +1143,7 @@ void Renderer::render() {
     }
 
     if (renderState != lastBgmState_) {
-        if (renderState == GameState::START_SCREEN || renderState == GameState::MODE_SELECTION) {
+        if (renderState == GameState::START_SCREEN || renderState == GameState::MODE_SELECTION || renderState == GameState::MENU_SETTINGS) {
             playBgm(1);
         } else if (renderState == GameState::PLAYING) {
             playBgm(2);
@@ -654,7 +1153,7 @@ void Renderer::render() {
         lastBgmState_ = renderState;
     }
 
-    if (currentState == GameState::START_SCREEN || currentState == GameState::MODE_SELECTION) {
+    if (currentState == GameState::START_SCREEN || currentState == GameState::MODE_SELECTION || currentState == GameState::MENU_SETTINGS) {
         lastScore_ = 0;
     } else if (currentState == GameState::PLAYING) {
         int currentScore = game_.getScore();
@@ -695,6 +1194,9 @@ void Renderer::render() {
             drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, startBackgroundTextureId_);
         }
         drawButton(0, -10.0f, 20.0f, 8.0f, 0.0f, 1.0f, 0.7f, true, "start");
+        float msx = worldHalfWidth - 10.0f;
+        float msy = kProjectionHalfHeight - 5.5f;
+        drawButton(msx, msy, 9.0f, 4.2f, 0.35f, 0.75f, 0.95f, true, "menu_settings_btn");
     }
     else if (renderState == GameState::MODE_SELECTION) {
         if (currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY) {
@@ -705,24 +1207,54 @@ void Renderer::render() {
             drawButton(0, -8.0f, 18.0f, 18.0f, 0.7f, 0.2f, 1.0f, false, "challenge");
             drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.2f, 0.9f, 0.4f, false, "more");
 
+            float msx = worldHalfWidth - 10.0f;
+            float msy = kProjectionHalfHeight - 5.5f;
+            drawButton(msx, msy, 9.0f, 4.2f, 0.35f, 0.75f, 0.95f, true, "menu_settings_btn");
             drawButton(32.0f, 12.0f, 16.0f, 5.0f, 0.9f, 0.6f, 0.1f, true, "store_btn");
             drawButton(-32.0f, 12.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn");
         }
     }
-    else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER) {
-        if (!game_.isEndlessArenaMode()) {
-            if (endlessSnakeCountTex_.id) {
-                glDeleteTextures(1, &endlessSnakeCountTex_.id);
-                endlessSnakeCountTex_.id = 0;
+    else if (renderState == GameState::MENU_SETTINGS) {
+        if (menuSettingsReturnState_ == GameState::START_SCREEN) {
+            if (startBackgroundTextureId_) {
+                drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, startBackgroundTextureId_);
             }
-            lastEndlessSnakeTotal_ = -1;
+        } else if (gameBackgroundTextureId_) {
+            drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, gameBackgroundTextureId_);
         }
-
+        drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 0.0f, 0.0f, 0.0f, 0.55f);
+        float boxW = 22.0f;
+        float boxH = 26.0f;
+        drawShape(0, 0.5f, boxW + 0.5f, boxH + 0.5f, 0.25f, 0.55f, 0.75f, 0.75f, false, 0.12f);
+        drawShape(0, 0.5f, boxW, boxH, 0.06f, 0.1f, 0.16f, 0.92f, false, 0.1f);
+        if (textTextures_.count("menu_page_settings_title")) {
+            auto& tit = textTextures_["menu_page_settings_title"];
+            float tw = std::min(14.0f, tit.width);
+            float th = tw * (tit.height / tit.width);
+            drawShape(0, 9.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tit.id);
+        }
+        showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
+        std::string hnKey = showSnakeHeadNamesCached_ ? "head_names_on" : "head_names_off";
+        drawButton(0, 4.0f, 17.0f, 3.8f, 0.35f, 0.75f, 0.95f, true, "edit_name");
+        drawButton(0, -0.5f, 19.0f, 3.8f, 0.45f, 0.55f, 0.65f, true, hnKey);
+        drawButton(0, -5.5f, 16.0f, 3.6f, 0.15f, 0.65f, 0.35f, true, "settings_back");
+    }
+    else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER) {
         const auto& snake = game_.getSnake();
         static Vector2f lastCamPos = {90.0f, 60.0f};
 
         if (!snake.empty()) lastCamPos = snake[0];
         float camX = lastCamPos.x, camY = lastCamPos.y;
+
+        bool showHeadLabels = fetchShowSnakeHeadNames();
+        std::string playerLabelName;
+        if (showHeadLabels) {
+            playerLabelName = fetchPlayerDisplayName();
+            if (playerLabelName != lastHeadLabelPlayerName_) {
+                lastHeadLabelPlayerName_ = playerLabelName;
+                releaseHeadNameTexCache();
+            }
+        }
 
         float w = game_.getWorldWidth(), h = game_.getWorldHeight();
         if (playingBackgroundTextureId_) {
@@ -797,14 +1329,16 @@ void Renderer::render() {
             for (size_t i = 0; i < n; ++i) {
                 float t = static_cast<float>(i) / static_cast<float>(std::max<size_t>(n - 1, 1));
                 float intensity = 1.0f - t * 0.45f;
-                float taper = 0.62f + 0.38f * (1.0f - t);
-                float curSize = ((i == 0) ? 1.35f : 0.95f) * aiScale * taper;
+                float curSize = 1.05f * aiScale;
+                const float segSize = snakeSegmentDrawSize(curSize, i == 0);
                 float ox = ai.segments[i].x - camX;
                 float oy = ai.segments[i].y - camY;
-                drawShape(ox, oy, curSize * 1.22f, curSize * 1.22f, ar * 0.2f, ag * 0.2f, ab * 0.25f, 1.08f, true);
-                drawShape(ox, oy, curSize, curSize, ar * intensity, ag * intensity, ab * intensity, 1.0f, true);
+                drawShape(ox, oy, segSize, segSize, ar * intensity, ag * intensity, ab * intensity, 1.0f, true);
                 if (i == 0) {
-                    drawShape(ox, oy, curSize * 1.55f, curSize * 1.55f, ar * 0.45f, ag * 0.45f, ab * 0.5f, 0.35f, true);
+                    drawSnakeHeadEyes(ox, oy, ai.rotation, segSize * 0.5f);
+                    if (showHeadLabels) {
+                        drawSnakeHeadNameLabel(ox, oy, segSize * 0.5f, ai.displayName);
+                    }
                 }
             }
         }
@@ -815,8 +1349,8 @@ void Renderer::render() {
         for (size_t i = 0; i < snake.size(); ++i) {
             float t = static_cast<float>(i) / static_cast<float>(std::max<size_t>(snake.size() - 1, 1));
             float intensity = 1.0f - t * 0.48f;
-            float taper = 0.68f + 0.32f * (1.0f - t);
-            float curSize = (i == 0 ? 1.58f : 1.05f) * scaleFactor * taper;
+            float curSize = 1.18f * scaleFactor;
+            const float segSize = snakeSegmentDrawSize(curSize, i == 0);
             float px = snake[i].x - camX;
             float py = snake[i].y - camY;
 
@@ -832,12 +1366,7 @@ void Renderer::render() {
                     case 6: r=1.0f; g=0.6f; b=0.0f; break;
                     case 7: r=0.6f; g=0.4f; b=0.2f; break;
                 }
-                drawShape(px, py, curSize * 1.2f, curSize * 1.2f, r * 0.15f, g * 0.15f, b * 0.18f, 1.06f, true);
-                drawShape(px, py, curSize, curSize, r * intensity, g * intensity, b * intensity, 1.0f, true);
-                if (i == 0) {
-                    drawShape(px, py, curSize * 1.75f, curSize * 1.75f, r * 0.5f, g * 0.55f, b * 0.6f, 0.32f, true);
-                    drawShape(px, py, curSize * 1.15f, curSize * 1.15f, 1.0f, 1.0f, 1.0f, 0.22f, true);
-                }
+                drawShape(px, py, segSize, segSize, r * intensity, g * intensity, b * intensity, 1.0f, true);
             } else {
                 GLuint tex = skinTex_[equippedSkin];
                 float angle = 0.0f;
@@ -847,15 +1376,19 @@ void Renderer::render() {
                     Vector2f dir = snake[i-1] - snake[i];
                     angle = std::atan2(dir.y, dir.x);
                 }
-                drawShape(px, py, curSize * 1.18f, curSize * 1.18f, 0.05f, 0.08f, 0.12f, 1.05f, true);
-                drawShape(px, py, curSize, curSize, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex, false, false, angle);
-                if (i == 0) {
-                    drawShape(px, py, curSize * 1.72f, curSize * 1.72f, 0.4f, 0.75f, 1.0f, 0.28f, true);
-                }
+                drawShape(px, py, segSize, segSize, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex, false, false, angle);
+            }
+
+            if (i == 0) {
+                drawSnakeHeadEyes(px, py, game_.getRotation(), segSize * 0.5f);
             }
 
             if (i == 0 && game_.hasShield()) {
-                drawShape(px, py, curSize + 1.2f, curSize + 1.2f, 0.2f, 0.9f, 1.0f, 0.5f, true);
+                drawShape(px, py, segSize + 1.2f, segSize + 1.2f, 0.2f, 0.9f, 1.0f, 0.5f, true);
+            }
+
+            if (i == 0 && showHeadLabels) {
+                drawSnakeHeadNameLabel(px, py, segSize * 0.5f, playerLabelName);
             }
         }
 
@@ -874,26 +1407,9 @@ void Renderer::render() {
         }
 
         drawEndlessRankPanel(worldHalfWidth);
-
-        if (game_.isEndlessArenaMode()) {
-            int total = game_.getTotalSnakeCount();
-            if (total != lastEndlessSnakeTotal_) {
-                if (endlessSnakeCountTex_.id) glDeleteTextures(1, &endlessSnakeCountTex_.id);
-                endlessSnakeCountTex_ = createTextTexture("蛇总数: " + std::to_string(total), 26);
-                lastEndlessSnakeTotal_ = total;
-            }
-            if (endlessSnakeCountTex_.id != 0) {
-                float tcx = worldHalfWidth - 13.5f;
-                float tcy = kProjectionHalfHeight - 3.6f;
-                float tw = std::min(15.0f, endlessSnakeCountTex_.width);
-                float th = tw * (endlessSnakeCountTex_.height / endlessSnakeCountTex_.width);
-                drawShape(tcx, tcy, tw + 1.2f, th + 0.9f, 0.03f, 0.06f, 0.12f, 0.82f, false, 0.12f);
-                drawShape(tcx, tcy, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, endlessSnakeCountTex_.id);
-            }
-        }
     }
 
-    if (currentState != GameState::PAUSED && currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY && currentState != GameState::GAME_OVER) {
+    if (currentState != GameState::PAUSED && currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY && currentState != GameState::GAME_OVER && currentState != GameState::MENU_SETTINGS) {
         float gearX = worldHalfWidth - 4.0f;
         float gearY = kProjectionHalfHeight - 4.0f;
         drawShape(gearX, gearY, 3.5f, 3.5f, 0.8f, 0.8f, 0.8f, 0.8f, false, 0.0f, 0, true);
@@ -1097,6 +1613,25 @@ void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g,
     glDrawElements(GL_TRIANGLES, model.getIndexCount(), GL_UNSIGNED_SHORT, model.getIndexData());
 }
 
+void Renderer::drawSnakeHeadEyes(float headX, float headY, float facingRad, float bodyRadius) {
+    const float fwd = bodyRadius * 0.36f;
+    const float side = bodyRadius * 0.48f;
+    const float eyeR = bodyRadius * 0.26f;
+    const float fx = std::cos(facingRad);
+    const float fy = std::sin(facingRad);
+    const float lx = -std::sin(facingRad);
+    const float ly = std::cos(facingRad);
+    for (int s = -1; s <= 1; s += 2) {
+        const float sf = static_cast<float>(s);
+        const float ex = headX + fx * fwd + lx * (side * sf);
+        const float ey = headY + fy * fwd + ly * (side * sf);
+        drawShape(ex, ey, eyeR, eyeR, 0.92f, 0.94f, 1.0f, 1.0f, true);
+        const float px = fx * (eyeR * 0.2f);
+        const float py = fy * (eyeR * 0.2f);
+        drawShape(ex + px, ey + py, eyeR * 0.42f, eyeR * 0.42f, 0.03f, 0.04f, 0.09f, 1.0f, true);
+    }
+}
+
 void Renderer::handleInput() {
     gRenderer = this;
     if (width_ <= 0 || height_ <= 0) {
@@ -1110,7 +1645,9 @@ void Renderer::handleInput() {
         auto &keyEvent = inputBuffer->keyEvents[i];
         if (keyEvent.keyCode == AKEYCODE_BACK && keyEvent.action == AKEY_EVENT_ACTION_DOWN) {
             GameState state = game_.getState();
-            if (state == GameState::START_SCREEN || state == GameState::MODE_SELECTION) {
+            if (state == GameState::MENU_SETTINGS) {
+                closeMenuSettings();
+            } else if (state == GameState::START_SCREEN || state == GameState::MODE_SELECTION) {
                 pendingExitDialog_.store(true);
             } else if (state == GameState::PLAYING) {
                 previousState_ = state;
@@ -1146,7 +1683,26 @@ void Renderer::handleInput() {
                 continue;
             }
 
-            if (game_.getState() != GameState::PAUSED && game_.getState() != GameState::STORE && game_.getState() != GameState::SKIN_INVENTORY && game_.getState() != GameState::GAME_OVER) {
+            if (game_.getState() == GameState::MENU_SETTINGS) {
+                if (abs(nx) < 8.5f && abs(ny - 4.0f) < 2.0f) {
+                    showPlayerNameEditorDialog();
+                    clearRankPanelCache();
+                    releaseHeadNameTexCache();
+                    lastHeadLabelPlayerName_.clear();
+                    playSfx(2);
+                } else if (abs(nx) < 9.5f && abs(ny - (-0.5f)) < 2.0f) {
+                    bool v = !fetchShowSnakeHeadNames();
+                    setShowSnakeHeadNames(v);
+                    showSnakeHeadNamesCached_ = v;
+                    releaseHeadNameTexCache();
+                    playSfx(2);
+                } else if (abs(nx) < 8.5f && abs(ny - (-5.5f)) < 2.0f) {
+                    closeMenuSettings();
+                }
+                continue;
+            }
+
+            if (game_.getState() != GameState::PAUSED && game_.getState() != GameState::STORE && game_.getState() != GameState::SKIN_INVENTORY && game_.getState() != GameState::GAME_OVER && game_.getState() != GameState::MENU_SETTINGS) {
                 float gearX = (kProjectionHalfHeight * aspect) - 4.0f;
                 float gearY = kProjectionHalfHeight - 4.0f;
                 if (abs(nx - gearX) < 3.0f && abs(ny - gearY) < 3.0f) {
@@ -1158,12 +1714,31 @@ void Renderer::handleInput() {
             }
 
             if (game_.getState() == GameState::START_SCREEN) {
+                float worldHalfW = kProjectionHalfHeight * aspect;
+                float msx = worldHalfW - 10.0f;
+                float msy = kProjectionHalfHeight - 5.5f;
+                if (abs(nx - msx) < 5.0f && abs(ny - msy) < 2.3f) {
+                    menuSettingsReturnState_ = GameState::START_SCREEN;
+                    showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
+                    game_.setState(GameState::MENU_SETTINGS);
+                    playSfx(2);
+                    continue;
+                }
                 if (abs(nx) < 10.0f && abs(ny + 10.0f) < 4.0f) {
                     playSfx(2);
                     game_.setState(GameState::MODE_SELECTION);
                 }
             } else if (game_.getState() == GameState::MODE_SELECTION) {
-                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
+                float worldHalfW = kProjectionHalfHeight * aspect;
+                float msx = worldHalfW - 10.0f;
+                float msy = kProjectionHalfHeight - 5.5f;
+                if (abs(nx - msx) < 5.0f && abs(ny - msy) < 2.3f) {
+                    menuSettingsReturnState_ = GameState::MODE_SELECTION;
+                    showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
+                    game_.setState(GameState::MENU_SETTINGS);
+                    playSfx(2);
+                    continue;
+                } else if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
                     endlessArenaActive_ = true;
                     game_.setEndlessArenaMode(true);
                     clearRankPanelCache();

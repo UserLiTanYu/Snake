@@ -35,6 +35,7 @@ public:
     void requestGoToMainMenu() { pendingMainMenu_.store(true); }
     void restartGame();
     void goToMainMenu();
+    void closeMenuSettings();
     GameState getGameState() { return game_.getState(); }
 
 private:
@@ -43,6 +44,7 @@ private:
     void createModels();
 
     void drawShape(float x, float y, float sx, float sy, float r, float g, float b, float a = 1.0f, bool isCircle = false, float radius = 0.0f, GLuint textureId = 0, bool isGear = false, bool isLightning = false, float rotation = 0.0f);
+    void drawSnakeHeadEyes(float headX, float headY, float facingRad, float bodyRadius);
     void drawButton(float x, float y, float w, float h, float r, float g, float b, bool active, const std::string& text = "");
     void triggerGameOver();
 
@@ -81,6 +83,17 @@ private:
 
     void loadTextTextures();
     TextTexture createTextTexture(const std::string& text, int fontSize);
+    TextTexture createTextTextureColored(const std::string& text, int fontSize, int argb);
+    TextTexture createTextTextureLeft(const std::string& text, int fontSize);
+    TextTexture createTextTextureColoredLeft(const std::string& text, int fontSize, int argb);
+    TextTexture createTextTextureRight(const std::string& text, int fontSize);
+    std::string fetchPlayerDisplayName();
+    void showPlayerNameEditorDialog();
+    bool fetchShowSnakeHeadNames();
+    void setShowSnakeHeadNames(bool enabled);
+    void releaseHeadNameTexCache();
+    TextTexture getOrCreateHeadNameTexture(const std::string& name);
+    void drawSnakeHeadNameLabel(float wx, float wy, float headRadius, const std::string& name);
     GLuint loadBackgroundTexture(const std::string& fileName);
 
     void syncRankPanelTextures();
@@ -88,6 +101,8 @@ private:
     void releaseRankLineTextures();
     void clearRankPanelCache();
     bool hitEndlessRankPanel(float nx, float ny) const;
+    void syncRankPlayerStatTextures();
+    void releaseRankPlayerStatTextures();
 
     android_app *app_;
     EGLDisplay display_;
@@ -114,12 +129,20 @@ private:
     TextTexture dynamicCoinText_;
 
     bool endlessArenaActive_ = false;
+    GameState menuSettingsReturnState_ = GameState::MODE_SELECTION;
+    bool showSnakeHeadNamesCached_ = false;
+    std::string lastHeadLabelPlayerName_;
+    std::map<std::string, TextTexture> headNameTexCache_;
     bool rankingPanelExpanded_ = true;
     std::vector<int> rankSignature_;
-    std::vector<TextTexture> rankLineTextures_;
-
-    TextTexture endlessSnakeCountTex_;
-    int lastEndlessSnakeTotal_ = -1;
+    std::vector<TextTexture> rankLineLeftTextures_;
+    std::vector<TextTexture> rankLineLenTextures_;
+    TextTexture rankPlayerLenTex_;
+    TextTexture rankPlayerScoreTex_;
+    TextTexture rankPlayerKillsTex_;
+    int rankPlayerStatCacheLen_ = -1;
+    int rankPlayerStatCacheScore_ = -1;
+    int rankPlayerStatCacheKills_ = -1;
 
     float rankPanelHitL_ = 0.0f;
     float rankPanelHitR_ = 0.0f;

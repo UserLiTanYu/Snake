@@ -14,6 +14,27 @@ constexpr int kAiMinSegments = 3;
 constexpr int kAiMaxSegments = 22;
 constexpr float kMinSpawnSeparation = 14.0f;
 
+static const char* const kBotNamePool[] = {
+        u8"\u75be\u98ce", u8"\u8d64\u7130", u8"\u6697\u5f71", u8"\u51b0\u7259", u8"\u96f7\u9e23",
+        u8"\u5e7b\u5149", u8"\u661f\u5c51", u8"\u9010\u6708", u8"\u72c2\u6f9c", u8"\u6714\u96ea",
+        u8"\u8ffd\u98ce\u5c11\u5e74", u8"\u6697\u591c\u730e\u624b", u8"\u9713\u8679\u9a7e\u9a76\u5458",
+        u8"\u91cf\u5b50\u541e\u566c\u8005", u8"\u661f\u5c18\u6d41\u6d6a\u8005", u8"\u8d5b\u535a\u8d2a\u5403\u86c7",
+        u8"\u673a\u68b0\u89c9\u9192\u8005", u8"\u6781\u5bd2\u730e\u98df\u8005", u8"\u539f\u5b50\u72c2\u60f3\u66f2",
+        u8"\u8d85\u7a7a\u6f2b\u6e38\u8005", u8"\u6df1\u6d77\u6f2b\u6b65\u8005", u8"\u70c8\u7130\u5f81\u670d\u8005",
+        u8"\u5e7d\u5f71\u523a\u5ba2", u8"\u78a7\u6ce2\u6f02\u6d41\u8005", u8"\u7d2b\u7535\u7a7f\u68ad\u8005",
+        u8"\u91d1\u9cde\u7834\u98ce\u8005", u8"\u94f6\u6cb3\u5de1\u822a\u5458", u8"\u9ed1\u6d1e\u8fb9\u7f18\u5ba2",
+        u8"\u5149\u901f\u5c0f\u961f\u957f", u8"\u5f02\u661f\u79fb\u6c11", u8"\u6570\u636e\u6d41\u6d6a\u86c7",
+        u8"\u795e\u79d8\u89c2\u5bdf\u8005", u8"\u65f6\u7a7a\u9519\u4f4d\u8005", u8"\u865a\u7a7a\u6f2b\u6b65\u8005",
+        u8"\u5fae\u5149\u95ea\u7535\u86c7", u8"\u5bd2\u971c\u4e4b\u5fc3", u8"\u70c8\u9633\u4e4b\u5f71",
+        u8"\u5e7d\u6f6d\u5b88\u671b\u8005", u8"\u78a7\u6d9b\u4e4b\u5b50", u8"\u9713\u8679\u8fb9\u7f18",
+        u8"\u91cf\u5b50\u8df3\u8dc3\u8005", u8"\u8109\u51b2\u5c0f\u80fd\u624b", u8"\u6da1\u6da1\u4e0d\u5c45",
+        u8"\u6d41\u661f\u5212\u8fc7", u8"\u6781\u5ba2\u65e0\u540d", u8"\u591c\u9e20\u4e4b\u773c",
+        u8"\u5e7d\u7075\u6f2b\u6b65", u8"\u5bd2\u971c\u4e4b\u5203", u8"\u8d64\u7130\u957f\u6b4c",
+        u8"\u51b0\u7259\u5c11\u4e3b", u8"\u96f7\u9e23\u4e4b\u5b50", u8"\u5e7b\u5149\u5b88\u671b",
+        u8"\u661f\u5c51\u96c6\u5408", u8"\u9010\u6708\u8005", u8"\u72c2\u6f9c\u4e4b\u5fc3",
+};
+static constexpr int kBotNameCount = static_cast<int>(sizeof(kBotNamePool) / sizeof(kBotNamePool[0]));
+
 float wrapAngle(float a) {
     while (a > M_PI) a -= static_cast<float>(2.0 * M_PI);
     while (a < -M_PI) a += static_cast<float>(2.0 * M_PI);
@@ -60,6 +81,7 @@ void SnakeGame::reset() {
     rotation_ = M_PI / 2.0f;
     isBoosting_ = false;
     score_ = 0;
+    playerKillCount_ = 0;
     state_ = GameState::START_SCREEN;
 
     baseSpeed_ = 8.0f;
@@ -136,6 +158,8 @@ void SnakeGame::spawnOneAISnake() {
     }
     std::uniform_real_distribution<float> ang(0.0f, static_cast<float>(2.0 * M_PI));
     ai.rotation = ang(rng_);
+    std::uniform_int_distribution<int> namePick(0, kBotNameCount - 1);
+    ai.displayName = kBotNamePool[namePick(rng_)];
     aiSnakes_.push_back(std::move(ai));
 }
 
@@ -181,6 +205,51 @@ std::vector<RankEntry> SnakeGame::getLengthLeaderboard() const {
         return a.length > b.length;
     });
     return rows;
+}
+
+std::vector<RankPanelRow> SnakeGame::getRankPanelRows() const {
+    struct Item {
+        int len;
+        bool pl;
+        int ai;
+    };
+    std::vector<Item> items;
+    items.push_back({static_cast<int>(snake_.size()), true, -1});
+    for (size_t i = 0; i < aiSnakes_.size(); ++i) {
+        items.push_back({static_cast<int>(aiSnakes_[i].segments.size()), false, static_cast<int>(i)});
+    }
+    std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.len > b.len; });
+
+    std::vector<RankPanelRow> sorted;
+    sorted.reserve(items.size());
+    for (size_t k = 0; k < items.size(); ++k) {
+        RankPanelRow r;
+        r.rank = static_cast<int>(k + 1);
+        r.length = items[k].len;
+        r.isPlayer = items[k].pl;
+        r.aiIndex = items[k].ai;
+        sorted.push_back(r);
+    }
+
+    const int nShow = std::min(9, static_cast<int>(sorted.size()));
+    std::vector<RankPanelRow> out;
+    for (int i = 0; i < nShow; ++i) {
+        out.push_back(sorted[static_cast<size_t>(i)]);
+    }
+
+    bool playerInTop9 = false;
+    for (const auto& r : out) {
+        if (r.isPlayer) playerInTop9 = true;
+    }
+    if (!playerInTop9) {
+        for (const auto& r : sorted) {
+            if (r.isPlayer) {
+                out.push_back(r);
+                break;
+            }
+        }
+    }
+    return out;
 }
 
 void SnakeGame::update(float deltaTime) {
@@ -460,6 +529,7 @@ void SnakeGame::checkAIvsPlayerTail() {
         if (dead) {
             spawnFoodFromDeadAI(ai);
             aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(aiIdx));
+            ++playerKillCount_;
             continue;
         }
         ++aiIdx;
@@ -492,6 +562,7 @@ void SnakeGame::checkPlayerVsAI() {
             }
             spawnFoodFromDeadAI(aiSnakes_[aiIdx]);
             aiSnakes_.erase(aiSnakes_.begin() + static_cast<std::ptrdiff_t>(aiIdx));
+            ++playerKillCount_;
             continue;
         }
 

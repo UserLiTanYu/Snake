@@ -13,7 +13,9 @@ import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.SoundPool
 import android.os.Bundle
+import android.text.InputFilter
 import android.view.View
+import android.widget.EditText
 import androidx.activity.OnBackPressedCallback
 import androidx.annotation.Keep
 import com.google.androidgamesdk.GameActivity
@@ -41,6 +43,8 @@ class MainActivity : GameActivity() {
 
     private external fun nativeIsAtMainMenu(): Boolean
 
+    private external fun nativeTryCloseMenuOverlay(): Boolean
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -49,6 +53,7 @@ class MainActivity : GameActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (nativeTryCloseMenuOverlay()) return
                 if (nativeIsAtMainMenu()) {
                     showExitDialog()
                 } else {
@@ -93,6 +98,43 @@ class MainActivity : GameActivity() {
     fun equipSkin(skinId: Int) {
         if (isSkinOwned(skinId)) {
             prefs.edit().putInt("equipped_skin", skinId).apply()
+        }
+    }
+
+    @Keep
+    fun getPlayerDisplayName(): String {
+        val raw = prefs.getString("player_display_name", null)?.trim().orEmpty()
+        return if (raw.isEmpty()) "玩家" else raw.take(12)
+    }
+
+    @Keep
+    fun setPlayerDisplayName(raw: String) {
+        val t = raw.trim().take(12)
+        prefs.edit().putString("player_display_name", if (t.isEmpty()) "玩家" else t).apply()
+    }
+
+    @Keep
+    fun isShowSnakeHeadNames(): Boolean = prefs.getBoolean("show_snake_head_names", false)
+
+    @Keep
+    fun setShowSnakeHeadNames(enabled: Boolean) {
+        prefs.edit().putBoolean("show_snake_head_names", enabled).apply()
+    }
+
+    @Keep
+    fun showPlayerNameEditor() {
+        runOnUiThread {
+            val input = EditText(this).apply {
+                setText(getPlayerDisplayName())
+                filters = arrayOf(InputFilter.LengthFilter(12))
+                setPadding(48, 32, 48, 32)
+            }
+            AlertDialog.Builder(this)
+                .setTitle("修改昵称")
+                .setView(input)
+                .setPositiveButton("确定") { _, _ -> setPlayerDisplayName(input.text.toString()) }
+                .setNegativeButton("取消", null)
+                .show()
         }
     }
 
@@ -289,6 +331,98 @@ class MainActivity : GameActivity() {
 
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        return intArrayOf(width, height) + pixels
+    }
+
+    @Keep
+    fun getTextPixelsColored(text: String, fontSize: Int, colorArgb: Int): IntArray {
+        val paint = Paint()
+        paint.textSize = fontSize.toFloat()
+        paint.color = colorArgb
+        paint.textAlign = Paint.Align.CENTER
+        paint.isAntiAlias = true
+        paint.typeface = Typeface.DEFAULT_BOLD
+
+        val width = paint.measureText(text).toInt().coerceAtLeast(1)
+        val metrics = paint.fontMetrics
+        val height = (metrics.bottom - metrics.top).toInt().coerceAtLeast(1)
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawText(text, width / 2f, -metrics.top, paint)
+
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        bitmap.recycle()
+        return intArrayOf(width, height) + pixels
+    }
+
+    @Keep
+    fun getTextPixelsLeft(text: String, fontSize: Int): IntArray {
+        val paint = Paint()
+        paint.textSize = fontSize.toFloat()
+        paint.color = Color.WHITE
+        paint.textAlign = Paint.Align.LEFT
+        paint.isAntiAlias = true
+        paint.typeface = Typeface.DEFAULT_BOLD
+
+        val width = paint.measureText(text).toInt().coerceAtLeast(1)
+        val metrics = paint.fontMetrics
+        val height = (metrics.bottom - metrics.top).toInt().coerceAtLeast(1)
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawText(text, 0f, -metrics.top, paint)
+
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        bitmap.recycle()
+        return intArrayOf(width, height) + pixels
+    }
+
+    @Keep
+    fun getTextPixelsColoredLeft(text: String, fontSize: Int, colorArgb: Int): IntArray {
+        val paint = Paint()
+        paint.textSize = fontSize.toFloat()
+        paint.color = colorArgb
+        paint.textAlign = Paint.Align.LEFT
+        paint.isAntiAlias = true
+        paint.typeface = Typeface.DEFAULT_BOLD
+
+        val width = paint.measureText(text).toInt().coerceAtLeast(1)
+        val metrics = paint.fontMetrics
+        val height = (metrics.bottom - metrics.top).toInt().coerceAtLeast(1)
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawText(text, 0f, -metrics.top, paint)
+
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        bitmap.recycle()
+        return intArrayOf(width, height) + pixels
+    }
+
+    @Keep
+    fun getTextPixelsRight(text: String, fontSize: Int): IntArray {
+        val paint = Paint()
+        paint.textSize = fontSize.toFloat()
+        paint.color = Color.WHITE
+        paint.textAlign = Paint.Align.RIGHT
+        paint.isAntiAlias = true
+        paint.typeface = Typeface.DEFAULT_BOLD
+
+        val width = paint.measureText(text).toInt().coerceAtLeast(1)
+        val metrics = paint.fontMetrics
+        val height = (metrics.bottom - metrics.top).toInt().coerceAtLeast(1)
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawText(text, width.toFloat(), -metrics.top, paint)
+
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        bitmap.recycle()
         return intArrayOf(width, height) + pixels
     }
 
