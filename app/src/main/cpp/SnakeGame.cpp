@@ -301,7 +301,8 @@ void SnakeGame::update(float deltaTime) {
                 pendingGrowth_ -= 1.0f;
             }
 
-            it = foods_.erase(it);
+            std::swap(*it, foods_.back());
+            foods_.pop_back();
             if (foods_.size() < 90) spawnFood();
         } else {
             ++it;

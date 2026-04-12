@@ -293,8 +293,8 @@ TextTexture Renderer::createTextTexture(const std::string& text, int fontSize) {
     int texH = pixels[1];
 
     TextTexture tex;
-    tex.width = (float)texW / 10.0f;
-    tex.height = (float)texH / 10.0f;
+    tex.width = (float)texW / 40.0f;
+    tex.height = (float)texH / 40.0f;
 
     glGenTextures(1, &tex.id);
     glBindTexture(GL_TEXTURE_2D, tex.id);
@@ -330,13 +330,13 @@ TextTexture Renderer::createTextTextureColored(const std::string& text, int font
                 int texW = pixels[0];
                 int texH = pixels[1];
                 if (texW >= 1 && texH >= 1) {
-                tex.width = (float)texW / 10.0f;
-                tex.height = (float)texH / 10.0f;
-                glGenTextures(1, &tex.id);
-                glBindTexture(GL_TEXTURE_2D, tex.id);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[2]);
+                    tex.width = (float)texW / 40.0f;
+                    tex.height = (float)texH / 40.0f;
+                    glGenTextures(1, &tex.id);
+                    glBindTexture(GL_TEXTURE_2D, tex.id);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texW, texH, 0, GL_RGBA, GL_UNSIGNED_BYTE, &pixels[2]);
                 }
                 env->ReleaseIntArrayElements(pixelArray, pixels, JNI_ABORT);
             }
@@ -371,8 +371,8 @@ TextTexture Renderer::createTextTextureLeft(const std::string& text, int fontSiz
                 int texW = pixels[0];
                 int texH = pixels[1];
                 if (texW >= 1 && texH >= 1) {
-                    tex.width = (float)texW / 10.0f;
-                    tex.height = (float)texH / 10.0f;
+                    tex.width = (float)texW / 40.0f;
+                    tex.height = (float)texH / 40.0f;
                     glGenTextures(1, &tex.id);
                     glBindTexture(GL_TEXTURE_2D, tex.id);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -412,8 +412,8 @@ TextTexture Renderer::createTextTextureColoredLeft(const std::string& text, int 
                 int texW = pixels[0];
                 int texH = pixels[1];
                 if (texW >= 1 && texH >= 1) {
-                    tex.width = (float)texW / 10.0f;
-                    tex.height = (float)texH / 10.0f;
+                    tex.width = (float)texW / 40.0f;
+                    tex.height = (float)texH / 40.0f;
                     glGenTextures(1, &tex.id);
                     glBindTexture(GL_TEXTURE_2D, tex.id);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -453,8 +453,8 @@ TextTexture Renderer::createTextTextureRight(const std::string& text, int fontSi
                 int texW = pixels[0];
                 int texH = pixels[1];
                 if (texW >= 1 && texH >= 1) {
-                    tex.width = (float)texW / 10.0f;
-                    tex.height = (float)texH / 10.0f;
+                    tex.width = (float)texW / 40.0f;
+                    tex.height = (float)texH / 40.0f;
                     glGenTextures(1, &tex.id);
                     glBindTexture(GL_TEXTURE_2D, tex.id);
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -559,7 +559,7 @@ void Renderer::releaseHeadNameTexCache() {
 TextTexture Renderer::getOrCreateHeadNameTexture(const std::string& name) {
     auto it = headNameTexCache_.find(name);
     if (it != headNameTexCache_.end()) return it->second;
-    TextTexture t = createTextTexture(name, 17);
+    TextTexture t = createTextTexture(name, 68);
     headNameTexCache_[name] = t;
     return t;
 }
@@ -582,157 +582,157 @@ void Renderer::closeMenuSettings() {
 }
 
 void Renderer::loadTextTextures() {
-    textTextures_["start"] = createTextTexture("开始游戏", 50);
-    textTextures_["endless"] = createTextTexture("无尽模式", 40);
-    textTextures_["challenge"] = createTextTexture("挑战模式", 40);
-    textTextures_["more"] = createTextTexture("更多玩法", 40);
-    textTextures_["music_on"] = createTextTexture("音乐: 开", 40);
-    textTextures_["music_off"] = createTextTexture("音乐: 关", 40);
-    textTextures_["sfx_on"] = createTextTexture("音效: 开", 40);
-    textTextures_["sfx_off"] = createTextTexture("音效: 关", 40);
-    textTextures_["resume"] = createTextTexture("继续游戏", 40);
-    textTextures_["main_menu"] = createTextTexture("返回主界面", 40);
-    textTextures_["quit"] = createTextTexture("退出游戏", 40);
-    textTextures_["settings"] = createTextTexture("游戏设置", 50);
+    textTextures_["start"] = createTextTexture("开始游戏", 200);
+    textTextures_["endless"] = createTextTexture("无尽模式", 160);
+    textTextures_["challenge"] = createTextTexture("挑战模式", 160);
+    textTextures_["more"] = createTextTexture("更多玩法", 160);
+    textTextures_["music_on"] = createTextTexture("音乐: 开", 160);
+    textTextures_["music_off"] = createTextTexture("音乐: 关", 160);
+    textTextures_["sfx_on"] = createTextTexture("音效: 开", 160);
+    textTextures_["sfx_off"] = createTextTexture("音效: 关", 160);
+    textTextures_["resume"] = createTextTexture("继续游戏", 160);
+    textTextures_["main_menu"] = createTextTexture("返回主界面", 160);
+    textTextures_["quit"] = createTextTexture("退出游戏", 160);
+    textTextures_["settings"] = createTextTexture("设置", 200);
 
-    textTextures_["store_btn"] = createTextTexture("商店", 40);
-    textTextures_["inventory_btn"] = createTextTexture("皮肤", 40);
-    textTextures_["store_title"] = createTextTexture("皮肤商店", 50);
-    textTextures_["inventory_title"] = createTextTexture("皮肤库", 50);
-    textTextures_["buy"] = createTextTexture("购买", 30);
-    textTextures_["owned"] = createTextTexture("已拥有", 30);
-    textTextures_["equip"] = createTextTexture("穿戴", 30);
-    textTextures_["equipped"] = createTextTexture("已穿戴", 30);
+    textTextures_["store_btn"] = createTextTexture("商店", 160);
+    textTextures_["inventory_btn"] = createTextTexture("皮肤", 160);
+    textTextures_["store_title"] = createTextTexture("皮肤商店", 200);
+    textTextures_["inventory_title"] = createTextTexture("皮肤库", 200);
+    textTextures_["buy"] = createTextTexture("购买", 120);
+    textTextures_["owned"] = createTextTexture("已拥有", 120);
+    textTextures_["equip"] = createTextTexture("穿戴", 120);
+    textTextures_["equipped"] = createTextTexture("已穿戴", 120);
 
-    textTextures_["price_500"] = createTextTexture("500 金币", 30);
-    textTextures_["price_1000"] = createTextTexture("1000 金币", 30);
-    textTextures_["price_2000"] = createTextTexture("2000 金币", 30);
-    textTextures_["price_3000"] = createTextTexture("3000 金币", 30);
-    textTextures_["price_5000"] = createTextTexture("5000 金币", 30);
-    textTextures_["price_6000"] = createTextTexture("6000 金币", 30);
-    textTextures_["price_8000"] = createTextTexture("8000 金币", 30);
-    textTextures_["price_10000"] = createTextTexture("10000 金币", 30);
+    textTextures_["price_500"] = createTextTexture("500 金币", 120);
+    textTextures_["price_1000"] = createTextTexture("1000 金币", 120);
+    textTextures_["price_2000"] = createTextTexture("2000 金币", 120);
+    textTextures_["price_3000"] = createTextTexture("3000 金币", 120);
+    textTextures_["price_5000"] = createTextTexture("5000 金币", 120);
+    textTextures_["price_6000"] = createTextTexture("6000 金币", 120);
+    textTextures_["price_8000"] = createTextTexture("8000 金币", 120);
+    textTextures_["price_10000"] = createTextTexture("10000 金币", 120);
 
-    textTextures_["skin_0"] = createTextTexture("青色", 25);
-    textTextures_["skin_1"] = createTextTexture("红色", 25);
-    textTextures_["skin_2"] = createTextTexture("绿色", 25);
-    textTextures_["skin_3"] = createTextTexture("黄色", 25);
-    textTextures_["skin_4"] = createTextTexture("紫色", 25);
-    textTextures_["skin_5"] = createTextTexture("粉色", 25);
-    textTextures_["skin_6"] = createTextTexture("橙色", 25);
-    textTextures_["skin_7"] = createTextTexture("褐色", 25);
+    textTextures_["skin_0"] = createTextTexture("青色", 100);
+    textTextures_["skin_1"] = createTextTexture("红色", 100);
+    textTextures_["skin_2"] = createTextTexture("绿色", 100);
+    textTextures_["skin_3"] = createTextTexture("黄色", 100);
+    textTextures_["skin_4"] = createTextTexture("紫色", 100);
+    textTextures_["skin_5"] = createTextTexture("粉色", 100);
+    textTextures_["skin_6"] = createTextTexture("橙色", 100);
+    textTextures_["skin_7"] = createTextTexture("褐色", 100);
 
-    textTextures_["skin_8"] = createTextTexture("棉花糖", 25);
-    textTextures_["skin_9"] = createTextTexture("毛绒球", 25);
-    textTextures_["skin_10"] = createTextTexture("大西瓜", 25);
-    textTextures_["skin_11"] = createTextTexture("等离子", 25);
-    textTextures_["skin_12"] = createTextTexture("金刚体", 25);
-    textTextures_["skin_13"] = createTextTexture("熔岩球", 25);
-    textTextures_["skin_14"] = createTextTexture("霓虹体", 25);
-    textTextures_["skin_15"] = createTextTexture("冰霜晶", 25);
-    textTextures_["skin_16"] = createTextTexture("神鳞片", 25);
-    textTextures_["skin_17"] = createTextTexture("珍珠贝", 25);
-    textTextures_["skin_18"] = createTextTexture("暗星空", 25);
-    textTextures_["skin_19"] = createTextTexture("纯金球", 25);
+    textTextures_["skin_8"] = createTextTexture("棉花糖", 100);
+    textTextures_["skin_9"] = createTextTexture("毛绒球", 100);
+    textTextures_["skin_10"] = createTextTexture("大西瓜", 100);
+    textTextures_["skin_11"] = createTextTexture("等离子", 100);
+    textTextures_["skin_12"] = createTextTexture("金刚体", 100);
+    textTextures_["skin_13"] = createTextTexture("熔岩球", 100);
+    textTextures_["skin_14"] = createTextTexture("霓虹体", 100);
+    textTextures_["skin_15"] = createTextTexture("冰霜晶", 100);
+    textTextures_["skin_16"] = createTextTexture("神鳞片", 100);
+    textTextures_["skin_17"] = createTextTexture("珍珠贝", 100);
+    textTextures_["skin_18"] = createTextTexture("暗星空", 100);
+    textTextures_["skin_19"] = createTextTexture("纯金球", 100);
 
-    textTextures_["rank_title"] = createTextTexture("实时排行·前9", 16);
-    textTextures_["rank_fold"] = createTextTexture("点击收起", 13);
-    textTextures_["rank_expand"] = createTextTexture("排行 展开", 14);
-    textTextures_["edit_name"] = createTextTexture("修改昵称", 34);
-    textTextures_["menu_settings_btn"] = createTextTexture("设置", 36);
-    textTextures_["menu_page_settings_title"] = createTextTexture("主页设置", 44);
-    textTextures_["head_names_on"] = createTextTexture("显示蛇头名字: 开", 32);
-    textTextures_["head_names_off"] = createTextTexture("显示蛇头名字: 关", 32);
-    textTextures_["settings_back"] = createTextTexture("返回", 36);
+    textTextures_["rank_title"] = createTextTexture("实时排行·前9", 64);
+    textTextures_["rank_fold"] = createTextTexture("点击收起", 52);
+    textTextures_["rank_expand"] = createTextTexture("排行榜 (点击展开)", 60);
+    textTextures_["rank_close_hint"] = createTextTexture("排行榜 (点击关闭)", 60);
+
+    // --- 修改：设置局内名字，替代原有的设置按钮贴图 ---
+    textTextures_["edit_name"] = createTextTexture("修改昵称", 160);
+    textTextures_["head_names_on"] = createTextTexture("显示名字: 开", 160);
+    textTextures_["head_names_off"] = createTextTexture("显示名字: 关", 160);
 }
 
 namespace {
-const char* utf8RankMedalPrefix(int rank) {
-    switch (rank) {
-        case 1: return "\xf0\x9f\x91\x91 ";  // crown
-        case 2: return "\xf0\x9f\xa5\x88 "; // silver medal
-        case 3: return "\xf0\x9f\xa5\x89 "; // bronze medal
-        default: return "";
-    }
-}
-
-constexpr float kSnakeHeadDrawDiam = 1.5f;
-constexpr float kSnakeBodyDrawDiam = 1.1f;
-
-inline float snakeSegmentDrawSize(float baseCurSize, bool isHead) {
-    const float unit = baseCurSize / kSnakeBodyDrawDiam;
-    return unit * (isHead ? kSnakeHeadDrawDiam : kSnakeBodyDrawDiam);
-}
-
-size_t utf8CodepointCount(const std::string& s) {
-    size_t n = 0;
-    for (size_t i = 0; i < s.size(); ) {
-        unsigned char c = static_cast<unsigned char>(s[i]);
-        size_t charLen = 1;
-        if ((c & 0x80) == 0) {
-            charLen = 1;
-        } else if ((c & 0xE0) == 0xC0) {
-            charLen = 2;
-        } else if ((c & 0xF0) == 0xE0) {
-            charLen = 3;
-        } else if ((c & 0xF8) == 0xF0) {
-            charLen = 4;
-        } else {
-            ++i;
-            continue;
+    const char* utf8RankMedalPrefix(int rank) {
+        switch (rank) {
+            case 1: return "\xf0\x9f\xa5\x87 ";  // 🥇
+            case 2: return "\xf0\x9f\xa5\x88 ";  // 🥈
+            case 3: return "\xf0\x9f\xa5\x89 ";  // 🥉
+            default: return "";
         }
-        if (i + charLen > s.size()) break;
-        i += charLen;
-        ++n;
     }
-    return n;
-}
 
-std::string utf8PrefixCodepoints(const std::string& s, size_t maxCp) {
-    if (maxCp == 0) return {};
-    size_t count = 0;
-    size_t end = 0;
-    for (size_t i = 0; i < s.size(); ) {
-        unsigned char c = static_cast<unsigned char>(s[i]);
-        size_t charLen = 1;
-        if ((c & 0x80) == 0) {
-            charLen = 1;
-        } else if ((c & 0xE0) == 0xC0) {
-            charLen = 2;
-        } else if ((c & 0xF0) == 0xE0) {
-            charLen = 3;
-        } else if ((c & 0xF8) == 0xF0) {
-            charLen = 4;
-        } else {
-            ++i;
-            continue;
+    constexpr float kSnakeHeadDrawDiam = 1.5f;
+    constexpr float kSnakeBodyDrawDiam = 1.1f;
+
+    inline float snakeSegmentDrawSize(float baseCurSize, bool isHead) {
+        const float unit = baseCurSize / kSnakeBodyDrawDiam;
+        return unit * (isHead ? kSnakeHeadDrawDiam : kSnakeBodyDrawDiam);
+    }
+
+    size_t utf8CodepointCount(const std::string& s) {
+        size_t n = 0;
+        for (size_t i = 0; i < s.size(); ) {
+            unsigned char c = static_cast<unsigned char>(s[i]);
+            size_t charLen = 1;
+            if ((c & 0x80) == 0) {
+                charLen = 1;
+            } else if ((c & 0xE0) == 0xC0) {
+                charLen = 2;
+            } else if ((c & 0xF0) == 0xE0) {
+                charLen = 3;
+            } else if ((c & 0xF8) == 0xF0) {
+                charLen = 4;
+            } else {
+                ++i;
+                continue;
+            }
+            if (i + charLen > s.size()) break;
+            i += charLen;
+            ++n;
         }
-        if (i + charLen > s.size()) break;
-        if (count >= maxCp) break;
-        end = i + charLen;
-        i += charLen;
-        ++count;
+        return n;
     }
-    return s.substr(0, end);
-}
 
-std::string ellipsisRankDisplayName(const std::string& name, size_t maxCp) {
-    const std::string ell = u8"\u2026";
-    if (utf8CodepointCount(name) <= maxCp) return name;
-    if (maxCp == 0) return ell;
-    return utf8PrefixCodepoints(name, maxCp - 1) + ell;
-}
-
-void aiPaletteRgb(int paletteId, float& r, float& g, float& b) {
-    switch (paletteId % 6) {
-        case 0: r = 0.25f; g = 0.85f; b = 1.0f; break;
-        case 1: r = 1.0f; g = 0.45f; b = 0.35f; break;
-        case 2: r = 0.45f; g = 1.0f; b = 0.55f; break;
-        case 3: r = 1.0f; g = 0.92f; b = 0.35f; break;
-        case 4: r = 0.78f; g = 0.4f; b = 1.0f; break;
-        default: r = 0.95f; g = 0.5f; b = 1.0f; break;
+    std::string utf8PrefixCodepoints(const std::string& s, size_t maxCp) {
+        if (maxCp == 0) return {};
+        size_t count = 0;
+        size_t end = 0;
+        for (size_t i = 0; i < s.size(); ) {
+            unsigned char c = static_cast<unsigned char>(s[i]);
+            size_t charLen = 1;
+            if ((c & 0x80) == 0) {
+                charLen = 1;
+            } else if ((c & 0xE0) == 0xC0) {
+                charLen = 2;
+            } else if ((c & 0xF0) == 0xE0) {
+                charLen = 3;
+            } else if ((c & 0xF8) == 0xF0) {
+                charLen = 4;
+            } else {
+                ++i;
+                continue;
+            }
+            if (i + charLen > s.size()) break;
+            if (count >= maxCp) break;
+            end = i + charLen;
+            i += charLen;
+            ++count;
+        }
+        return s.substr(0, end);
     }
-}
+
+    std::string ellipsisRankDisplayName(const std::string& name, size_t maxCp) {
+        const std::string ell = u8"\u2026";
+        if (utf8CodepointCount(name) <= maxCp) return name;
+        if (maxCp == 0) return ell;
+        return utf8PrefixCodepoints(name, maxCp - 1) + ell;
+    }
+
+    void aiPaletteRgb(int paletteId, float& r, float& g, float& b) {
+        switch (paletteId % 6) {
+            case 0: r = 0.25f; g = 0.85f; b = 1.0f; break;
+            case 1: r = 1.0f; g = 0.45f; b = 0.35f; break;
+            case 2: r = 0.45f; g = 1.0f; b = 0.55f; break;
+            case 3: r = 1.0f; g = 0.92f; b = 0.35f; break;
+            case 4: r = 0.78f; g = 0.4f; b = 1.0f; break;
+            default: r = 0.95f; g = 0.5f; b = 1.0f; break;
+        }
+    }
 
 }
 
@@ -773,9 +773,10 @@ void Renderer::syncRankPanelTextures() {
     releaseRankLineTextures();
     rankSignature_ = std::move(sig);
 
-    constexpr int kPlayerGoldArgb = 0xFFFFD54A;
-    constexpr int kRankLineFont = 17;
-    constexpr size_t kRankNameMaxCp = 8;
+    constexpr int kPlayerBlueArgb = 0xFF33AAFF;
+    constexpr int kRankLineFont = 52;
+    constexpr size_t kRankNameMaxCp = 6;
+
     rankLineLeftTextures_.reserve(rows.size());
     rankLineLenTextures_.reserve(rows.size());
     for (const auto& row : rows) {
@@ -786,17 +787,26 @@ void Renderer::syncRankPanelTextures() {
             name = ais[static_cast<size_t>(row.aiIndex)].displayName;
         }
         if (name.empty()) name = row.isPlayer ? "玩家" : "?";
+
         std::string shortName = ellipsisRankDisplayName(name, kRankNameMaxCp);
-        std::string leftLine = std::to_string(row.rank) + ". " + std::string(utf8RankMedalPrefix(row.rank)) + shortName;
+
+        std::string leftLine;
+        if (row.rank <= 3) {
+            leftLine = std::string(utf8RankMedalPrefix(row.rank)) + shortName;
+        } else {
+            std::string rankPad = (row.rank < 10) ? " " : "";
+            leftLine = rankPad + std::to_string(row.rank) + ". " + shortName;
+        }
+
         std::string lenStr = std::to_string(row.length);
         TextTexture lenTex = createTextTextureRight(lenStr, kRankLineFont);
         if (lenTex.id == 0) lenTex = createTextTextureLeft(lenStr, kRankLineFont);
         rankLineLenTextures_.push_back(lenTex);
 
         if (row.isPlayer) {
-            TextTexture tt = createTextTextureColoredLeft(leftLine, kRankLineFont, kPlayerGoldArgb);
+            TextTexture tt = createTextTextureColoredLeft(leftLine, kRankLineFont, kPlayerBlueArgb);
             if (tt.id == 0) tt = createTextTextureLeft(leftLine, kRankLineFont);
-            if (tt.id == 0) tt = createTextTextureColored(leftLine, kRankLineFont, kPlayerGoldArgb);
+            if (tt.id == 0) tt = createTextTextureColored(leftLine, kRankLineFont, kPlayerBlueArgb);
             if (tt.id == 0) tt = createTextTexture(leftLine, kRankLineFont);
             rankLineLeftTextures_.push_back(tt);
         } else {
@@ -843,13 +853,17 @@ void Renderer::syncRankPlayerStatTextures() {
     std::string lenLine = std::string(u8"\u957f\u5ea6 ") + std::to_string(len);
     std::string scoreLine = std::string(u8"\u79ef\u5206 ") + std::to_string(score);
     std::string killsLine = std::string(u8"\u51fb\u6740 ") + std::to_string(kills);
-    constexpr int kYellowArgb = 0xFFFFFF00;
-    rankPlayerLenTex_ = createTextTextureColored(lenLine, 14, kYellowArgb);
-    if (rankPlayerLenTex_.id == 0) rankPlayerLenTex_ = createTextTexture(lenLine, 14);
-    rankPlayerScoreTex_ = createTextTextureColored(scoreLine, 14, kYellowArgb);
-    if (rankPlayerScoreTex_.id == 0) rankPlayerScoreTex_ = createTextTexture(scoreLine, 14);
-    rankPlayerKillsTex_ = createTextTextureColored(killsLine, 14, kYellowArgb);
-    if (rankPlayerKillsTex_.id == 0) rankPlayerKillsTex_ = createTextTexture(killsLine, 14);
+    constexpr int kBlueArgb = 0xFF33AAFF;
+
+    // --- 核心修改：使用严格左对齐的方式生成高清文字贴图 ---
+    rankPlayerLenTex_ = createTextTextureColoredLeft(lenLine, 56, kBlueArgb);
+    if (rankPlayerLenTex_.id == 0) rankPlayerLenTex_ = createTextTextureLeft(lenLine, 56);
+
+    rankPlayerScoreTex_ = createTextTextureColoredLeft(scoreLine, 56, kBlueArgb);
+    if (rankPlayerScoreTex_.id == 0) rankPlayerScoreTex_ = createTextTextureLeft(scoreLine, 56);
+
+    rankPlayerKillsTex_ = createTextTextureColoredLeft(killsLine, 56, kBlueArgb);
+    if (rankPlayerKillsTex_.id == 0) rankPlayerKillsTex_ = createTextTextureLeft(killsLine, 56);
 }
 
 void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
@@ -859,75 +873,35 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     const float left = -worldHalfWidth + 1.0f;
     const float topY = kProjectionHalfHeight - 2.2f;
 
-    if (!rankingPanelExpanded_) {
-        const float barW = 10.5f;
-        const float barH = 2.35f;
-        const float cx = left + barW * 0.5f;
-        const float cy = topY - barH * 0.5f;
-        drawShape(cx, cy, barW + 0.3f, barH + 0.3f, 0.15f, 0.75f, 1.0f, 0.10f, false, 0.11f);
-        drawShape(cx, cy, barW, barH, 0.05f, 0.07f, 0.14f, 0.18f, false, 0.10f);
-        if (textTextures_.count("rank_expand")) {
-            auto& tex = textTextures_["rank_expand"];
-            float tw = std::min(9.5f, tex.width);
-            float th = tw * (tex.height / tex.width);
-            drawShape(cx, cy, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
-        }
-        syncRankPlayerStatTextures();
-        if (rankPlayerLenTex_.id && rankPlayerScoreTex_.id && rankPlayerKillsTex_.id) {
-            const float margin = 0.22f;
-            const float panelRight = left + barW;
-            float tw1 = std::min(7.8f, rankPlayerLenTex_.width);
-            float th1 = tw1 * (rankPlayerLenTex_.height / std::max(rankPlayerLenTex_.width, 0.01f));
-            float tw2 = std::min(7.8f, rankPlayerScoreTex_.width);
-            float th2 = tw2 * (rankPlayerScoreTex_.height / std::max(rankPlayerScoreTex_.width, 0.01f));
-            float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
-            float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
-            float twMax = std::max(tw1, std::max(tw2, tw3));
-            float statCx = panelRight + margin + twMax * 0.5f;
-            float yLen = cy + 0.52f;
-            float yScore = cy;
-            float yKills = cy - 0.52f;
-            drawShape(statCx, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
-            drawShape(statCx, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
-            drawShape(statCx, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
-        }
-        rankPanelHitL_ = left;
-        rankPanelHitR_ = left + barW;
-        rankPanelHitT_ = topY;
-        rankPanelHitB_ = topY - barH;
-        return;
-    }
-
     const float padX = 0.38f;
     const float padY = 0.35f;
-    const float gapTitle = 0.32f;
     const float lineSpacing = 0.48f;
     const float gapHint = 0.28f;
+    const float gapTitle = 0.4f;
 
     float maxW = 0.0f;
+
     float titleTw = 0.0f;
     float titleTh = 0.0f;
-    if (textTextures_.count("rank_title")) {
-        auto& title = textTextures_["rank_title"];
-        titleTw = std::min(9.5f, title.width);
-        titleTh = titleTw * (title.height / title.width);
+    std::string titleKey = rankingPanelExpanded_ ? "rank_close_hint" : "rank_expand";
+    if (textTextures_.count(titleKey)) {
+        auto& title = textTextures_[titleKey];
+        titleTw = std::min(10.0f, title.width);
+        titleTh = titleTw * (title.height / std::max(title.width, 0.01f));
         maxW = std::max(maxW, titleTw);
     }
 
-    constexpr float kRankMidGap = 0.32f;
-    constexpr float kRankLeftCap = 9.2f;
-    constexpr float kRankLenCap = 2.9f;
-
+    constexpr float kRankMidGap = 2.5f;
     std::vector<float> rowHs;
     rowHs.reserve(rankLineLeftTextures_.size());
     float maxRankRowInnerW = 0.0f;
     for (size_t i = 0; i < rankLineLeftTextures_.size(); ++i) {
         const auto& lt = rankLineLeftTextures_[i];
         const auto& rtex = rankLineLenTextures_[i];
-        float lw = std::min(kRankLeftCap, lt.width);
-        float lh = lw * (lt.height / std::max(lt.width, 0.01f));
-        float rw = std::min(kRankLenCap, rtex.width);
-        float rh = rw * (rtex.height / std::max(rtex.width, 0.01f));
+        float lw = lt.width;
+        float lh = lt.height;
+        float rw = rtex.width;
+        float rh = rtex.height;
         maxRankRowInnerW = std::max(maxRankRowInnerW, lw + kRankMidGap + rw);
         rowHs.push_back(std::max(lh, rh));
     }
@@ -935,21 +909,75 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
 
     float hintW = 0.0f;
     float hintH = 0.0f;
-    if (textTextures_.count("rank_fold")) {
+    if (rankingPanelExpanded_ && textTextures_.count("rank_fold")) {
         auto& hint = textTextures_["rank_fold"];
         hintW = std::min(7.5f, hint.width);
-        hintH = hintW * (hint.height / hint.width);
+        hintH = hintW * (hint.height / std::max(hint.width, 0.01f));
         maxW = std::max(maxW, hintW);
     }
 
-    float innerContentH = titleTh + gapTitle;
+    const float panelW = maxW + 2.0f * padX;
+    const float innerTop = topY - padY;
+
+    if (!rankingPanelExpanded_) {
+        float panelH = titleTh + 2.8f * padY;
+        const float cx = left + panelW * 0.5f;
+        const float cy = topY - panelH * 0.5f;
+
+        drawShape(cx, cy, panelW + 0.35f, panelH + 0.35f, 0.2f, 0.85f, 1.0f, 0.08f, false, 0.11f);
+        drawShape(cx, cy, panelW, panelH, 0.04f, 0.06f, 0.12f, 0.14f, false, 0.09f);
+
+        if (titleTh > 0.0f) {
+            float yTitleC = innerTop - titleTh * 0.5f;
+            drawShape(cx, yTitleC, titleTw, titleTh, 0.6f, 0.8f, 1.0f, 0.9f, false, 0.0f, textTextures_[titleKey].id);
+        }
+
+        syncRankPlayerStatTextures();
+        if (rankPlayerLenTex_.id && rankPlayerScoreTex_.id && rankPlayerKillsTex_.id) {
+            const float margin = 0.22f;
+            const float panelRight = left + panelW;
+            float tw1 = std::min(7.8f, rankPlayerLenTex_.width);
+            float th1 = tw1 * (rankPlayerLenTex_.height / std::max(rankPlayerLenTex_.width, 0.01f));
+            float tw2 = std::min(7.8f, rankPlayerScoreTex_.width);
+            float th2 = tw2 * (rankPlayerScoreTex_.height / std::max(rankPlayerScoreTex_.width, 0.01f));
+            float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
+            float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
+
+            // --- 核心修改：固定一个绝对靠左的 X 坐标 ---
+            float statLeftX = panelRight + margin;
+            // 针对不同宽度的贴图，独立计算它们的中心点，实现完美左对齐
+            float cx1 = statLeftX + tw1 * 0.5f;
+            float cx2 = statLeftX + tw2 * 0.5f;
+            float cx3 = statLeftX + tw3 * 0.5f;
+
+            float yLen = innerTop - th1 * 0.5f;
+            float yScore = yLen - th1 * 0.5f - 0.25f - th2 * 0.5f;
+            float yKills = yScore - th2 * 0.5f - 0.25f - th3 * 0.5f;
+
+            // 使用独立计算的 cx 进行渲染
+            drawShape(cx1, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
+            drawShape(cx2, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
+            drawShape(cx3, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
+        }
+
+        rankPanelHitL_ = left;
+        rankPanelHitR_ = left + panelW;
+        rankPanelHitT_ = topY;
+        rankPanelHitB_ = topY - panelH;
+        return;
+    }
+
+    float innerContentH = 0.0f;
+    if (titleTh > 0.0f) {
+        innerContentH += (titleTh + gapTitle);
+    }
+
     for (size_t i = 0; i < rowHs.size(); ++i) {
         innerContentH += rowHs[i];
         if (i + 1 < rowHs.size()) innerContentH += lineSpacing;
     }
     innerContentH += gapHint + hintH;
 
-    const float panelW = maxW + 2.0f * padX;
     const float panelH = innerContentH + 2.0f * padY;
     const float cx = left + panelW * 0.5f;
     const float cy = topY - panelH * 0.5f;
@@ -957,11 +985,12 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     drawShape(cx, cy, panelW + 0.35f, panelH + 0.35f, 0.2f, 0.85f, 1.0f, 0.08f, false, 0.11f);
     drawShape(cx, cy, panelW, panelH, 0.04f, 0.06f, 0.12f, 0.14f, false, 0.09f);
 
-    const float innerTop = topY - padY;
-    float yNextTop = innerTop - titleTh - gapTitle;
-    if (textTextures_.count("rank_title") && titleTh > 0.0f) {
-        float yTitleC = innerTop - titleTh * 0.5f;
-        drawShape(cx, yTitleC, titleTw, titleTh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["rank_title"].id);
+    float yNextTop = innerTop;
+
+    if (titleTh > 0.0f) {
+        float yTitleC = yNextTop - titleTh * 0.5f;
+        drawShape(cx, yTitleC, titleTw, titleTh, 0.6f, 0.8f, 1.0f, 0.9f, false, 0.0f, textTextures_[titleKey].id);
+        yNextTop -= (titleTh + gapTitle);
     }
 
     const float innerL = left + padX;
@@ -969,12 +998,13 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     for (size_t i = 0; i < rankLineLeftTextures_.size(); ++i) {
         const auto& lt = rankLineLeftTextures_[i];
         const auto& rtex = rankLineLenTextures_[i];
-        float lw = std::min(kRankLeftCap, lt.width);
-        float lh = lw * (lt.height / std::max(lt.width, 0.01f));
-        float rw = std::min(kRankLenCap, rtex.width);
-        float rh = rw * (rtex.height / std::max(rtex.width, 0.01f));
+        float lw = lt.width;
+        float lh = lt.height;
+        float rw = rtex.width;
+        float rh = rtex.height;
         float rowH = rowHs[i];
         float yc = yNextTop - rowH * 0.5f;
+
         if (lt.id) {
             drawShape(innerL + lw * 0.5f, yc, lw, lh, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, lt.id);
         }
@@ -1001,14 +1031,21 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
         float th2 = tw2 * (rankPlayerScoreTex_.height / std::max(rankPlayerScoreTex_.width, 0.01f));
         float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
         float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
-        float twMax = std::max(tw1, std::max(tw2, tw3));
-        float statCx = panelRight + margin + twMax * 0.5f;
+
+        // --- 核心修改：固定一个绝对靠左的 X 坐标 ---
+        float statLeftX = panelRight + margin;
+        float cx1 = statLeftX + tw1 * 0.5f;
+        float cx2 = statLeftX + tw2 * 0.5f;
+        float cx3 = statLeftX + tw3 * 0.5f;
+
         float yLen = innerTop - th1 * 0.5f;
-        float yScore = yLen - th1 * 0.5f - 0.05f - th2 * 0.5f;
-        float yKills = yScore - th2 * 0.5f - 0.05f - th3 * 0.5f;
-        drawShape(statCx, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
-        drawShape(statCx, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
-        drawShape(statCx, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
+        float yScore = yLen - th1 * 0.5f - 0.25f - th2 * 0.5f;
+        float yKills = yScore - th2 * 0.5f - 0.25f - th3 * 0.5f;
+
+        // 使用独立计算的 cx 进行渲染
+        drawShape(cx1, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
+        drawShape(cx2, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
+        drawShape(cx3, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
     }
 
     rankPanelHitL_ = left;
@@ -1016,6 +1053,7 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
     rankPanelHitT_ = topY;
     rankPanelHitB_ = topY - panelH;
 }
+
 
 bool Renderer::hitEndlessRankPanel(float nx, float ny) const {
     return nx > rankPanelHitL_ && nx < rankPanelHitR_ && ny < rankPanelHitT_ && ny > rankPanelHitB_;
@@ -1114,26 +1152,48 @@ void Renderer::triggerReturnMenuDialog() {
 }
 
 void Renderer::render() {
-    if (pendingRestart_.load()) restartGame();
-    if (pendingMainMenu_.load()) goToMainMenu();
+        if (pendingRestart_.load()) restartGame();
+        if (pendingMainMenu_.load()) goToMainMenu();
 
-    if (pendingExitDialog_.load()) {
-        pendingExitDialog_.store(false);
-        triggerExitDialog();
-    }
+        if (pendingExitDialog_.load()) {
+            pendingExitDialog_.store(false);
+            triggerExitDialog();
+        }
 
-    if (pendingReturnMenuDialog_.load()) {
-        pendingReturnMenuDialog_.store(false);
-        triggerReturnMenuDialog();
-    }
+        if (pendingReturnMenuDialog_.load()) {
+            pendingReturnMenuDialog_.store(false);
+            triggerReturnMenuDialog();
+        }
 
-    auto now = std::chrono::steady_clock::now();
-    float deltaTime = std::chrono::duration<float>(now - lastFrameTime_).count();
-    lastFrameTime_ = now;
-    if (deltaTime > 0.033f) deltaTime = 0.033f;
+        auto now = std::chrono::steady_clock::now();
+        float deltaTime = std::chrono::duration<float>(now - lastFrameTime_).count();
+        lastFrameTime_ = now;
+        if (deltaTime > 0.033f) deltaTime = 0.033f;
 
-    game_.setEquippedSkin(getEquippedSkin());
-    game_.update(deltaTime);
+        game_.setEquippedSkin(getEquippedSkin());
+        game_.update(deltaTime);
+
+        // --- 核心修改：动态更新玩家名字按钮贴图 ---
+        static std::string lastMenuPlayerName = "";
+        static float nameUpdateTimer = 0.0f;
+        nameUpdateTimer -= deltaTime;
+        if (nameUpdateTimer <= 0.0f) {
+            nameUpdateTimer = 0.5f; // 每 0.5 秒检查一次，避免频繁调用 JNI 导致卡顿
+            std::string currentName = fetchPlayerDisplayName();
+
+            // 防御性判断：防止万一获取到的名字为空导致按钮消失
+            if (currentName.empty()) currentName = "玩家";
+
+            // 只有当名字发生真正改变时，才清理旧内存并重新生成贴图
+            if (currentName != lastMenuPlayerName) {
+                lastMenuPlayerName = currentName;
+                if (textTextures_.count("edit_name") && textTextures_["edit_name"].id != 0) {
+                    glDeleteTextures(1, &textTextures_["edit_name"].id);
+                }
+                textTextures_["edit_name"] = createTextTexture(currentName, 160);
+            }
+        }
+        // --------------------------------------
 
     GameState currentState = game_.getState();
     GameState renderState = currentState;
@@ -1143,7 +1203,8 @@ void Renderer::render() {
     }
 
     if (renderState != lastBgmState_) {
-        if (renderState == GameState::START_SCREEN || renderState == GameState::MODE_SELECTION || renderState == GameState::MENU_SETTINGS) {
+        // --- 移除了 MENU_SETTINGS ---
+        if (renderState == GameState::START_SCREEN || renderState == GameState::MODE_SELECTION) {
             playBgm(1);
         } else if (renderState == GameState::PLAYING) {
             playBgm(2);
@@ -1153,7 +1214,7 @@ void Renderer::render() {
         lastBgmState_ = renderState;
     }
 
-    if (currentState == GameState::START_SCREEN || currentState == GameState::MODE_SELECTION || currentState == GameState::MENU_SETTINGS) {
+    if (currentState == GameState::START_SCREEN || currentState == GameState::MODE_SELECTION) {
         lastScore_ = 0;
     } else if (currentState == GameState::PLAYING) {
         int currentScore = game_.getScore();
@@ -1194,9 +1255,7 @@ void Renderer::render() {
             drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, startBackgroundTextureId_);
         }
         drawButton(0, -10.0f, 20.0f, 8.0f, 0.0f, 1.0f, 0.7f, true, "start");
-        float msx = worldHalfWidth - 10.0f;
-        float msy = kProjectionHalfHeight - 5.5f;
-        drawButton(msx, msy, 9.0f, 4.2f, 0.35f, 0.75f, 0.95f, true, "menu_settings_btn");
+        // 去掉了主界面的文字设置按钮
     }
     else if (renderState == GameState::MODE_SELECTION) {
         if (currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY) {
@@ -1207,43 +1266,29 @@ void Renderer::render() {
             drawButton(0, -8.0f, 18.0f, 18.0f, 0.7f, 0.2f, 1.0f, false, "challenge");
             drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.2f, 0.9f, 0.4f, false, "more");
 
-            float msx = worldHalfWidth - 10.0f;
-            float msy = kProjectionHalfHeight - 5.5f;
-            drawButton(msx, msy, 9.0f, 4.2f, 0.35f, 0.75f, 0.95f, true, "menu_settings_btn");
+            // --- 核心布局修改 ---
             drawButton(32.0f, 12.0f, 16.0f, 5.0f, 0.9f, 0.6f, 0.1f, true, "store_btn");
-            drawButton(-32.0f, 12.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn");
+            drawButton(32.0f, 5.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn"); // 皮肤移到商店下方
+            drawButton(-32.0f, 12.0f, 16.0f, 5.0f, 0.35f, 0.75f, 0.95f, true, "edit_name"); // 修改名字放在左侧
         }
-    }
-    else if (renderState == GameState::MENU_SETTINGS) {
-        if (menuSettingsReturnState_ == GameState::START_SCREEN) {
-            if (startBackgroundTextureId_) {
-                drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, startBackgroundTextureId_);
-            }
-        } else if (gameBackgroundTextureId_) {
-            drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, gameBackgroundTextureId_);
-        }
-        drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 0.0f, 0.0f, 0.0f, 0.55f);
-        float boxW = 22.0f;
-        float boxH = 26.0f;
-        drawShape(0, 0.5f, boxW + 0.5f, boxH + 0.5f, 0.25f, 0.55f, 0.75f, 0.75f, false, 0.12f);
-        drawShape(0, 0.5f, boxW, boxH, 0.06f, 0.1f, 0.16f, 0.92f, false, 0.1f);
-        if (textTextures_.count("menu_page_settings_title")) {
-            auto& tit = textTextures_["menu_page_settings_title"];
-            float tw = std::min(14.0f, tit.width);
-            float th = tw * (tit.height / tit.width);
-            drawShape(0, 9.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tit.id);
-        }
-        showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
-        std::string hnKey = showSnakeHeadNamesCached_ ? "head_names_on" : "head_names_off";
-        drawButton(0, 4.0f, 17.0f, 3.8f, 0.35f, 0.75f, 0.95f, true, "edit_name");
-        drawButton(0, -0.5f, 19.0f, 3.8f, 0.45f, 0.55f, 0.65f, true, hnKey);
-        drawButton(0, -5.5f, 16.0f, 3.6f, 0.15f, 0.65f, 0.35f, true, "settings_back");
     }
     else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER) {
         const auto& snake = game_.getSnake();
         static Vector2f lastCamPos = {90.0f, 60.0f};
 
-        if (!snake.empty()) lastCamPos = snake[0];
+        if (!snake.empty()) {
+            float dx = snake[0].x - lastCamPos.x;
+            float dy = snake[0].y - lastCamPos.y;
+
+            if (std::sqrt(dx*dx + dy*dy) > 30.0f) {
+                lastCamPos = snake[0];
+            } else {
+                float lerpSpeed = 15.0f * deltaTime;
+                if (lerpSpeed > 1.0f) lerpSpeed = 1.0f;
+                lastCamPos.x += dx * lerpSpeed;
+                lastCamPos.y += dy * lerpSpeed;
+            }
+        }
         float camX = lastCamPos.x, camY = lastCamPos.y;
 
         bool showHeadLabels = fetchShowSnakeHeadNames();
@@ -1279,7 +1324,6 @@ void Renderer::render() {
             }
         }
 
-        // 渲染食物（核心：大小按对数缩放，本体带皮肤贴图）
         for (const auto& food : game_.getFoods()) {
             float foodScale = 1.0f;
             if (food.value > 1) {
@@ -1409,7 +1453,7 @@ void Renderer::render() {
         drawEndlessRankPanel(worldHalfWidth);
     }
 
-    if (currentState != GameState::PAUSED && currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY && currentState != GameState::GAME_OVER && currentState != GameState::MENU_SETTINGS) {
+    if (currentState != GameState::PAUSED && currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY && currentState != GameState::GAME_OVER) {
         float gearX = worldHalfWidth - 4.0f;
         float gearY = kProjectionHalfHeight - 4.0f;
         drawShape(gearX, gearY, 3.5f, 3.5f, 0.8f, 0.8f, 0.8f, 0.8f, false, 0.0f, 0, true);
@@ -1418,33 +1462,45 @@ void Renderer::render() {
     if (currentState == GameState::PAUSED) {
         drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 0.0f, 0.0f, 0.0f, 0.6f);
 
+        // --- 核心：略微调高设置面板，以容纳新增的开关按钮 ---
         float boxW = 20.0f;
-        float boxH = 32.0f;
+        float boxH = 34.0f;
         drawShape(0, -0.5f, boxW + 0.6f, boxH + 0.6f, 0.3f, 0.4f, 0.6f, 0.8f, false, 0.1f);
         drawShape(0, -0.5f, boxW, boxH, 0.1f, 0.12f, 0.18f, 0.95f, false, 0.1f);
 
         auto& titleTex = textTextures_["settings"];
-        float titleW = 11.0f;
+        float titleW = 5.5f;
         float titleH = titleW * (titleTex.height / titleTex.width);
-        drawShape(0, 11.0f, titleW, titleH, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, titleTex.id);
+        float titleY = (previousState_ == GameState::PLAYING) ? 13.0f : 12.0f;
+        drawShape(0, titleY, titleW, titleH, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, titleTex.id);
 
         std::string musicLabel = isMusicOn_ ? "music_on" : "music_off";
         std::string sfxLabel = isSfxOn_ ? "sfx_on" : "sfx_off";
 
+        // 获取实时名字开关状态
+        showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
+        std::string hnKey = showSnakeHeadNamesCached_ ? "head_names_on" : "head_names_off";
+
         float btnW = 16.0f;
         float btnH = 3.6f;
+        float gap = 4.5f;
 
         if (previousState_ == GameState::PLAYING) {
-            drawButton(0, 5.5f, btnW, btnH, 0.2f, 0.6f, 1.0f, true, musicLabel);
-            drawButton(0, 1.0f, btnW, btnH, 0.2f, 0.6f, 1.0f, true, sfxLabel);
-            drawButton(0, -3.5f, btnW, btnH, 0.1f, 0.8f, 0.3f, true, "resume");
-            drawButton(0, -8.0f, btnW, btnH, 0.8f, 0.4f, 0.1f, true, "main_menu");
-            drawButton(0, -12.5f, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
+            float startY = 8.5f;
+            drawButton(0, startY, btnW, btnH, 0.2f, 0.6f, 1.0f, true, musicLabel);
+            drawButton(0, startY - gap, btnW, btnH, 0.2f, 0.6f, 1.0f, true, sfxLabel);
+            drawButton(0, startY - gap*2, btnW, btnH, 0.2f, 0.6f, 1.0f, true, hnKey); // 新增：样式和音效一致
+            drawButton(0, startY - gap*3, btnW, btnH, 0.1f, 0.8f, 0.3f, true, "resume");
+            drawButton(0, startY - gap*4, btnW, btnH, 0.8f, 0.4f, 0.1f, true, "main_menu");
+            drawButton(0, startY - gap*5, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
         } else {
-            drawButton(0, 4.0f, btnW, btnH, 0.2f, 0.6f, 1.0f, true, musicLabel);
-            drawButton(0, -0.5f, btnW, btnH, 0.2f, 0.6f, 1.0f, true, sfxLabel);
-            drawButton(0, -5.0f, btnW, btnH, 0.1f, 0.8f, 0.3f, true, "main_menu");
-            drawButton(0, -9.5f, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
+            // 从主界面进来的设置
+            float startY = 6.25f;
+            drawButton(0, startY, btnW, btnH, 0.2f, 0.6f, 1.0f, true, musicLabel);
+            drawButton(0, startY - gap, btnW, btnH, 0.2f, 0.6f, 1.0f, true, sfxLabel);
+            drawButton(0, startY - gap*2, btnW, btnH, 0.2f, 0.6f, 1.0f, true, hnKey); // 新增：样式和音效一致
+            drawButton(0, startY - gap*3, btnW, btnH, 0.1f, 0.8f, 0.3f, true, "main_menu");
+            drawButton(0, startY - gap*4, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
         }
     }
     else if (currentState == GameState::STORE) {
@@ -1452,7 +1508,7 @@ void Renderer::render() {
         if (currentCoins != lastCoins_) {
             lastCoins_ = currentCoins;
             if (dynamicCoinText_.id != 0) glDeleteTextures(1, &dynamicCoinText_.id);
-            dynamicCoinText_ = createTextTexture("金币: " + std::to_string(currentCoins), 35);
+            dynamicCoinText_ = createTextTexture("金币: " + std::to_string(currentCoins), 140);
         }
 
         drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
@@ -1613,22 +1669,55 @@ void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g,
     glDrawElements(GL_TRIANGLES, model.getIndexCount(), GL_UNSIGNED_SHORT, model.getIndexData());
 }
 
+// 在 Renderer.cpp 中替換此函數
 void Renderer::drawSnakeHeadEyes(float headX, float headY, float facingRad, float bodyRadius) {
-    const float fwd = bodyRadius * 0.36f;
-    const float side = bodyRadius * 0.48f;
-    const float eyeR = bodyRadius * 0.26f;
+    // --- 極致大眼萌版修改 ---
+
+    // 1. 調整眼睛的形狀與位置
+    // 我們將 eyeR (eye radius) 大幅提升到 0.65f，這會讓眼睛佔據蛇頭大部分區域
+    const float eyeR = bodyRadius * 0.65f;
+    // 為了防止兩隻巨型眼睛重疊，我們稍微調大 side (side spacing)
+    const float side = bodyRadius * 0.58f;
+    // 稍微調整 fwd (forward offset)，讓眼睛貼近蛇頭的前端
+    const float fwd = bodyRadius * 0.38f;
+
+    // 2. 瞳孔與高光參數
+    // 為了展現照片中那種呆萌感，pupilR (pupil radius) 必須很大
+    const float pupilR = eyeR * 0.72f;
+    // h1R (primary highlight radius) 是主高光的大小
+    const float h1R = pupilR * 0.50f;
+
+    // 方向向量計算
     const float fx = std::cos(facingRad);
     const float fy = std::sin(facingRad);
     const float lx = -std::sin(facingRad);
     const float ly = std::cos(facingRad);
+
     for (int s = -1; s <= 1; s += 2) {
         const float sf = static_cast<float>(s);
         const float ex = headX + fx * fwd + lx * (side * sf);
         const float ey = headY + fy * fwd + ly * (side * sf);
-        drawShape(ex, ey, eyeR, eyeR, 0.92f, 0.94f, 1.0f, 1.0f, true);
-        const float px = fx * (eyeR * 0.2f);
-        const float py = fy * (eyeR * 0.2f);
-        drawShape(ex + px, ey + py, eyeR * 0.42f, eyeR * 0.42f, 0.03f, 0.04f, 0.09f, 1.0f, true);
+
+        // a) 繪製超大眼白
+        drawShape(ex, ey, eyeR, eyeR, 0.98f, 0.98f, 1.0f, 1.0f, true);
+
+        // b) 計算瞳孔中心並繪製
+        const float pupilCx = ex + fx * (eyeR * 0.12f);
+        const float pupilCy = ey + fy * (eyeR * 0.12f);
+        // 瞳孔顏色使用深藍黑，增加深邃感
+        drawShape(pupilCx, pupilCy, pupilR, pupilR, 0.02f, 0.04f, 0.12f, 1.0f, true);
+
+        // c) 繪製靈魂高光 (Highlight)
+        // 主高光放在瞳孔上方偏外側
+        const float h1OffX = -lx * (pupilR * 0.32f) + fx * (pupilR * 0.1f);
+        const float h1OffY = -ly * (pupilR * 0.32f) + fy * (pupilR * 0.1f);
+        drawShape(pupilCx + h1OffX, pupilCy + h1OffY, h1R, h1R, 1.0f, 1.0f, 1.0f, 1.0f, true);
+
+        // 小高光放在對角線位置，模擬眼睛的水潤感
+        const float h2R = h1R * 0.4f;
+        const float h2OffX = lx * (pupilR * 0.45f);
+        const float h2OffY = ly * (pupilR * 0.45f);
+        drawShape(pupilCx + h2OffX, pupilCy + h2OffY, h2R, h2R, 1.0f, 1.0f, 1.0f, 0.6f, true);
     }
 }
 
@@ -1645,9 +1734,7 @@ void Renderer::handleInput() {
         auto &keyEvent = inputBuffer->keyEvents[i];
         if (keyEvent.keyCode == AKEYCODE_BACK && keyEvent.action == AKEY_EVENT_ACTION_DOWN) {
             GameState state = game_.getState();
-            if (state == GameState::MENU_SETTINGS) {
-                closeMenuSettings();
-            } else if (state == GameState::START_SCREEN || state == GameState::MODE_SELECTION) {
+            if (state == GameState::START_SCREEN || state == GameState::MODE_SELECTION) {
                 pendingExitDialog_.store(true);
             } else if (state == GameState::PLAYING) {
                 previousState_ = state;
@@ -1683,26 +1770,7 @@ void Renderer::handleInput() {
                 continue;
             }
 
-            if (game_.getState() == GameState::MENU_SETTINGS) {
-                if (abs(nx) < 8.5f && abs(ny - 4.0f) < 2.0f) {
-                    showPlayerNameEditorDialog();
-                    clearRankPanelCache();
-                    releaseHeadNameTexCache();
-                    lastHeadLabelPlayerName_.clear();
-                    playSfx(2);
-                } else if (abs(nx) < 9.5f && abs(ny - (-0.5f)) < 2.0f) {
-                    bool v = !fetchShowSnakeHeadNames();
-                    setShowSnakeHeadNames(v);
-                    showSnakeHeadNamesCached_ = v;
-                    releaseHeadNameTexCache();
-                    playSfx(2);
-                } else if (abs(nx) < 8.5f && abs(ny - (-5.5f)) < 2.0f) {
-                    closeMenuSettings();
-                }
-                continue;
-            }
-
-            if (game_.getState() != GameState::PAUSED && game_.getState() != GameState::STORE && game_.getState() != GameState::SKIN_INVENTORY && game_.getState() != GameState::GAME_OVER && game_.getState() != GameState::MENU_SETTINGS) {
+            if (game_.getState() != GameState::PAUSED && game_.getState() != GameState::STORE && game_.getState() != GameState::SKIN_INVENTORY && game_.getState() != GameState::GAME_OVER) {
                 float gearX = (kProjectionHalfHeight * aspect) - 4.0f;
                 float gearY = kProjectionHalfHeight - 4.0f;
                 if (abs(nx - gearX) < 3.0f && abs(ny - gearY) < 3.0f) {
@@ -1714,31 +1782,12 @@ void Renderer::handleInput() {
             }
 
             if (game_.getState() == GameState::START_SCREEN) {
-                float worldHalfW = kProjectionHalfHeight * aspect;
-                float msx = worldHalfW - 10.0f;
-                float msy = kProjectionHalfHeight - 5.5f;
-                if (abs(nx - msx) < 5.0f && abs(ny - msy) < 2.3f) {
-                    menuSettingsReturnState_ = GameState::START_SCREEN;
-                    showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
-                    game_.setState(GameState::MENU_SETTINGS);
-                    playSfx(2);
-                    continue;
-                }
                 if (abs(nx) < 10.0f && abs(ny + 10.0f) < 4.0f) {
                     playSfx(2);
                     game_.setState(GameState::MODE_SELECTION);
                 }
             } else if (game_.getState() == GameState::MODE_SELECTION) {
-                float worldHalfW = kProjectionHalfHeight * aspect;
-                float msx = worldHalfW - 10.0f;
-                float msy = kProjectionHalfHeight - 5.5f;
-                if (abs(nx - msx) < 5.0f && abs(ny - msy) < 2.3f) {
-                    menuSettingsReturnState_ = GameState::MODE_SELECTION;
-                    showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
-                    game_.setState(GameState::MENU_SETTINGS);
-                    playSfx(2);
-                    continue;
-                } else if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
+                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
                     endlessArenaActive_ = true;
                     game_.setEndlessArenaMode(true);
                     clearRankPanelCache();
@@ -1760,16 +1809,23 @@ void Renderer::handleInput() {
                     game_.reset();
                     game_.startGame();
                 }
-                else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
+                else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) { // 商店按钮
                     previousState_ = game_.getState();
                     game_.setState(GameState::STORE);
                     storeScrollY_ = 0.0f;
                     playSfx(2);
                 }
-                else if (abs(nx + 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
+                else if (abs(nx - 32.0f) < 8.0f && abs(ny - 5.0f) < 2.5f) {  // 皮肤按钮 (移至商店下方)
                     previousState_ = game_.getState();
                     game_.setState(GameState::SKIN_INVENTORY);
                     inventoryScrollY_ = 0.0f;
+                    playSfx(2);
+                }
+                else if (abs(nx + 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) { // 修改昵称按钮 (取代原本皮肤位置)
+                    showPlayerNameEditorDialog();
+                    clearRankPanelCache();
+                    releaseHeadNameTexCache();
+                    lastHeadLabelPlayerName_.clear();
                     playSfx(2);
                 }
             } else if (game_.getState() == GameState::GAME_OVER && game_.isEndlessArenaMode()) {
@@ -1788,17 +1844,34 @@ void Renderer::handleInput() {
                 else if (px >= (float)width_ * 0.5f && boostPointerId_ == -1) boostPointerId_ = pointer.id;
             } else if (game_.getState() == GameState::PAUSED) {
                 if (abs(nx) < 8.0f) {
+                    float gap = 4.5f;
                     if (previousState_ == GameState::PLAYING) {
-                        if (abs(ny - 5.5f) < 1.8f) { isMusicOn_ = !isMusicOn_; setAudioSetting(1, isMusicOn_); playSfx(2); }
-                        else if (abs(ny - 1.0f) < 1.8f) { isSfxOn_ = !isSfxOn_; setAudioSetting(2, isSfxOn_); playSfx(2); }
-                        else if (abs(ny - (-3.5f)) < 1.8f) { game_.setState(previousState_); playSfx(2); }
-                        else if (abs(ny - (-8.0f)) < 1.8f) { game_.setState(GameState::MODE_SELECTION); playSfx(2); }
-                        else if (abs(ny - (-12.5f)) < 1.8f) { playSfx(2); pendingExitDialog_.store(true); }
+                        float startY = 8.5f;
+                        if (abs(ny - startY) < 1.8f) { isMusicOn_ = !isMusicOn_; setAudioSetting(1, isMusicOn_); playSfx(2); }
+                        else if (abs(ny - (startY - gap)) < 1.8f) { isSfxOn_ = !isSfxOn_; setAudioSetting(2, isSfxOn_); playSfx(2); }
+                        else if (abs(ny - (startY - gap*2)) < 1.8f) {
+                            bool v = !fetchShowSnakeHeadNames();
+                            setShowSnakeHeadNames(v);
+                            showSnakeHeadNamesCached_ = v;
+                            releaseHeadNameTexCache();
+                            playSfx(2);
+                        }
+                        else if (abs(ny - (startY - gap*3)) < 1.8f) { game_.setState(previousState_); playSfx(2); }
+                        else if (abs(ny - (startY - gap*4)) < 1.8f) { game_.setState(GameState::MODE_SELECTION); playSfx(2); }
+                        else if (abs(ny - (startY - gap*5)) < 1.8f) { playSfx(2); pendingExitDialog_.store(true); }
                     } else {
-                        if (abs(ny - 4.0f) < 1.8f) { isMusicOn_ = !isMusicOn_; setAudioSetting(1, isMusicOn_); playSfx(2); }
-                        else if (abs(ny - (-0.5f)) < 1.8f) { isSfxOn_ = !isSfxOn_; setAudioSetting(2, isSfxOn_); playSfx(2); }
-                        else if (abs(ny - (-5.0f)) < 1.8f) { game_.setState(previousState_); playSfx(2); }
-                        else if (abs(ny - (-9.5f)) < 1.8f) { playSfx(2); pendingExitDialog_.store(true); }
+                        float startY = 6.25f;
+                        if (abs(ny - startY) < 1.8f) { isMusicOn_ = !isMusicOn_; setAudioSetting(1, isMusicOn_); playSfx(2); }
+                        else if (abs(ny - (startY - gap)) < 1.8f) { isSfxOn_ = !isSfxOn_; setAudioSetting(2, isSfxOn_); playSfx(2); }
+                        else if (abs(ny - (startY - gap*2)) < 1.8f) {
+                            bool v = !fetchShowSnakeHeadNames();
+                            setShowSnakeHeadNames(v);
+                            showSnakeHeadNamesCached_ = v;
+                            releaseHeadNameTexCache();
+                            playSfx(2);
+                        }
+                        else if (abs(ny - (startY - gap*3)) < 1.8f) { game_.setState(previousState_); playSfx(2); }
+                        else if (abs(ny - (startY - gap*4)) < 1.8f) { playSfx(2); pendingExitDialog_.store(true); }
                     }
                 }
             }
