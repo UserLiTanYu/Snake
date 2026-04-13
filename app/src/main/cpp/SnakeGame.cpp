@@ -359,9 +359,23 @@ void SnakeGame::update(float deltaTime) {
     bool isRacingMode = (currentMode_ == GameMode::CHALLENGE_4 ||
                          currentMode_ == GameMode::CHALLENGE_5 ||
                          currentMode_ == GameMode::CHALLENGE_6 ||
-                         currentMode_ == GameMode::CHALLENGE_7);
+                         currentMode_ == GameMode::CHALLENGE_7 ||
+                         currentMode_ == GameMode::CHALLENGE_8 ||
+                         currentMode_ == GameMode::CHALLENGE_9);
 
     if (isRacingMode) {
+        mazeTimeElapsed_ += deltaTime;
+        float ex = snake_[0].x - mazeExit_.x;
+        float ey = snake_[0].y - mazeExit_.y;
+
+        if (std::sqrt(ex*ex + ey*ey) < 2.5f) { // 抵达出口区域
+            score_ = static_cast<int>(mazeTimeElapsed_); // 将最终秒数暂存到 score_ 中传给UI
+            state_ = GameState::CHALLENGE_CLEAR;
+            return;
+        }
+    }
+
+
     // --- 迷宮模式專屬邏輯：計時與檢測到達出口 ---
     if (currentMode_ == GameMode::CHALLENGE_7 || currentMode_ == GameMode::CHALLENGE_8 || currentMode_ == GameMode::CHALLENGE_9) {
         mazeTimeElapsed_ += deltaTime;
@@ -455,14 +469,15 @@ void SnakeGame::update(float deltaTime) {
     // --- 補充場地道具與食物 (排除第七關與第八關迷宮) ---
     // --- 补充场地道具与食物 (排除第七、八、九关迷宫) ---
     if (currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_8 && currentMode_ != GameMode::CHALLENGE_9&& currentMode_ != GameMode::CHALLENGE_4 && currentMode_ != GameMode::CHALLENGE_5 &&currentMode_ != GameMode::CHALLENGE_6) {
-    if (currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_4 && currentMode_ != GameMode::CHALLENGE_5 &&currentMode_ != GameMode::CHALLENGE_6) {
-        while (foods_.size() < 90) spawnFood();
-        if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
-            spawnFood();
-        }
-        while (powerUps_.size() < 3) spawnPowerUp();
-        if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
-            spawnPowerUp();
+        {
+            while (foods_.size() < 90) spawnFood();
+            if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
+                spawnFood();
+            }
+            while (powerUps_.size() < 3) spawnPowerUp();
+            if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
+                spawnPowerUp();
+            }
         }
     }
 }
@@ -1351,9 +1366,7 @@ void SnakeGame::startChallengeLevel9() {
     state_ = GameState::PLAYING;
 }
 
-BUILD_CHALLENGE_LEVEL(startChallengeLevel4, GameMode::CHALLENGE_4, 80, 120.0f) // 120秒限时
-BUILD_CHALLENGE_LEVEL(startChallengeLevel5, GameMode::CHALLENGE_5, 100, 110.0f)
-BUILD_CHALLENGE_LEVEL(startChallengeLevel6, GameMode::CHALLENGE_6, 120, 100.0f)
+
 void SnakeGame::buildTrackFromMap(const std::vector<std::string>& trackMap) {
     walls_.clear();
     int height = trackMap.size();

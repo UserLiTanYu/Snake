@@ -1329,8 +1329,14 @@ void Renderer::render() {
         jclass clazz = env->GetObjectClass(activityObj);
 
         // --- 核心修復：根據模式分開處理結算邏輯 ---
-        if (game_.getCurrentMode() == GameMode::CHALLENGE_7 || game_.getCurrentMode() == GameMode::CHALLENGE_8 || game_.getCurrentMode() == GameMode::CHALLENGE_9) {
-            // 迷宮模式：直接讀取真實耗時，越短越好
+        if (game_.getCurrentMode() == GameMode::CHALLENGE_4 ||
+            game_.getCurrentMode() == GameMode::CHALLENGE_5 ||
+            game_.getCurrentMode() == GameMode::CHALLENGE_6 ||
+            game_.getCurrentMode() == GameMode::CHALLENGE_7 ||
+            game_.getCurrentMode() == GameMode::CHALLENGE_8 ||
+            game_.getCurrentMode() == GameMode::CHALLENGE_9) {
+
+            // 迷宮/竞速模式：直接讀取真實耗時，越短越好
             int mazeTime = (int)game_.getMazeTimeElapsed();
             if (savedMax == 0 || mazeTime < savedMax) {
                 game_.setMaxScore(game_.getCurrentMode(), mazeTime);
@@ -1342,7 +1348,7 @@ void Renderer::render() {
             jmethodID method = env->GetMethodID(clazz, "showMazeClearDialog", "(II)V");
             if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)mazeTime);
 
-        } else {
+        }else {
             // 其他模式：讀取分數，越高越好
             if (curScore > savedMax) {
                 game_.setMaxScore(game_.getCurrentMode(), curScore);
@@ -1631,7 +1637,10 @@ void Renderer::render() {
             static int lastTimeVal = -1;
             static GameMode lastTimeMode = GameMode::ENDLESS;
 
-            if (curMode == GameMode::CHALLENGE_7 || curMode == GameMode::CHALLENGE_8 || curMode == GameMode::CHALLENGE_9) {
+            if (curMode == GameMode::CHALLENGE_4 || curMode == GameMode::CHALLENGE_5 ||
+                curMode == GameMode::CHALLENGE_6 || curMode == GameMode::CHALLENGE_7 ||
+                curMode == GameMode::CHALLENGE_8 || curMode == GameMode::CHALLENGE_9) {
+
                 int curTime = (int)game_.getMazeTimeElapsed();
                 if (curTime != lastTimeVal || curMode != lastTimeMode || timeProgressTex_.id == 0) {
                     lastTimeVal = curTime;
