@@ -1636,7 +1636,7 @@ void Renderer::render() {
                     lastTimeVal = curTime;
                     lastTimeMode = curMode;
                     if (timeProgressTex_.id) glDeleteTextures(1, &timeProgressTex_.id);
-                    std::string timeStr = u8"用时: " + std::to_string(curTime) + "s";
+                    std::string timeStr = u8"时间: " + std::to_string(curTime) + "s";
                     timeProgressTex_ = createTextTextureColored(timeStr, 64, 0xFF55DDFF);
                 }
                 if (timeProgressTex_.id) {

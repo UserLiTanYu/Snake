@@ -1313,7 +1313,7 @@ void SnakeGame::startChallengeLevel9() {
     snake_.clear();
     snake_.push_back(startPos);
     // 初始身体做短一点，不然在狭小的空间开局容易卡住
-    for(int i = 1; i < 3; ++i) {
+    for(int i = 1; i < 5; ++i) {
         snake_.push_back({startPos.x, startPos.y - i * 0.5f});
     }
     rotation_ = M_PI / 2.0f; // 面朝上方
