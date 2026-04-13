@@ -84,6 +84,7 @@ void SnakeGame::reset() {
 
     rotation_ = M_PI / 2.0f;
     isBoosting_ = false;
+    isTimeOut_ = false;
     score_ = 0;
     playerKillCount_ = 0;
     state_ = GameState::START_SCREEN;
@@ -330,7 +331,15 @@ std::vector<RankPanelRow> SnakeGame::getRankPanelRows() const {
 
 void SnakeGame::update(float deltaTime) {
     if (state_ != GameState::PLAYING) return;
-
+    if (hasTimeLimit()) {
+        timeRemaining_ -= deltaTime;
+        if (timeRemaining_ <= 0.0f) {
+            timeRemaining_ = 0.0f;
+            isTimeOut_ = true;
+            state_ = GameState::GAME_OVER;
+            return;
+        }
+    }
     if (speedTimer_ > 0.0f) speedTimer_ = std::max(0.0f, speedTimer_ - deltaTime);
     if (shieldTimer_ > 0.0f) shieldTimer_ = std::max(0.0f, shieldTimer_ - deltaTime);
     if (magnetTimer_ > 0.0f) magnetTimer_ = std::max(0.0f, magnetTimer_ - deltaTime);
@@ -894,11 +903,40 @@ void SnakeGame::checkAIVsAITail() {
     }
 }
 
+
+void SnakeGame::setMaxScore(GameMode mode, int score) {
+    if (mode == GameMode::CHALLENGE_1) maxScoreCh1_ = score;
+    else if (mode == GameMode::CHALLENGE_2) maxScoreCh2_ = score;
+    else if (mode == GameMode::CHALLENGE_3) maxScoreCh3_ = score;
+    else if (mode == GameMode::CHALLENGE_4) maxScoreCh4_ = score;
+    else if (mode == GameMode::CHALLENGE_5) maxScoreCh5_ = score;
+    else if (mode == GameMode::CHALLENGE_6) maxScoreCh6_ = score;
+    else if (mode == GameMode::CHALLENGE_7) maxScoreCh7_ = score;
+    else if (mode == GameMode::CHALLENGE_8) maxScoreCh8_ = score;
+    else if (mode == GameMode::CHALLENGE_9) maxScoreCh9_ = score;
+    else if (mode == GameMode::CHALLENGE_10) maxScoreCh10_ = score;
+}
+
+int SnakeGame::getMaxScore(GameMode mode) const {
+    if (mode == GameMode::CHALLENGE_1) return maxScoreCh1_;
+    else if (mode == GameMode::CHALLENGE_2) return maxScoreCh2_;
+    else if (mode == GameMode::CHALLENGE_3) return maxScoreCh3_;
+    else if (mode == GameMode::CHALLENGE_4) return maxScoreCh4_;
+    else if (mode == GameMode::CHALLENGE_5) return maxScoreCh5_;
+    else if (mode == GameMode::CHALLENGE_6) return maxScoreCh6_;
+    else if (mode == GameMode::CHALLENGE_7) return maxScoreCh7_;
+    else if (mode == GameMode::CHALLENGE_8) return maxScoreCh8_;
+    else if (mode == GameMode::CHALLENGE_9) return maxScoreCh9_;
+    else if (mode == GameMode::CHALLENGE_10) return maxScoreCh10_;
+    return 0;
+}
+
 int SnakeGame::calculateStars(GameMode mode, int score) const {
-    int target = 30;
-    if (mode == GameMode::CHALLENGE_1) target = 5;       // 修复：第一关实际目标是 5
+    if (isTimeOut_) return 0; // 超时直接 0 星
+    int target = 60;
+    if (mode == GameMode::CHALLENGE_1) target = 5;
     else if (mode == GameMode::CHALLENGE_2) target = 60;
-    else if (mode == GameMode::CHALLENGE_3) target = 60;
+    else target = 80; // 3关至10关默认目标
 
     if (score >= target) return 3;
     if (score >= target * 2 / 3) return 2;
@@ -906,14 +944,22 @@ int SnakeGame::calculateStars(GameMode mode, int score) const {
     return 0;
 }
 
+// --- 5. 修改 getChallengeStars 以支持后七关 ---
 int SnakeGame::getChallengeStars(GameMode mode) const {
     int score = 0;
     if (mode == GameMode::CHALLENGE_1) score = maxScoreCh1_;
     else if (mode == GameMode::CHALLENGE_2) score = maxScoreCh2_;
     else if (mode == GameMode::CHALLENGE_3) score = maxScoreCh3_;
-
+    else if (mode == GameMode::CHALLENGE_4) score = maxScoreCh4_;
+    else if (mode == GameMode::CHALLENGE_5) score = maxScoreCh5_;
+    else if (mode == GameMode::CHALLENGE_6) score = maxScoreCh6_;
+    else if (mode == GameMode::CHALLENGE_7) score = maxScoreCh7_;
+    else if (mode == GameMode::CHALLENGE_8) score = maxScoreCh8_;
+    else if (mode == GameMode::CHALLENGE_9) score = maxScoreCh9_;
+    else if (mode == GameMode::CHALLENGE_10) score = maxScoreCh10_;
     return calculateStars(mode, score);
 }
+
 bool SnakeGame::checkCollisionWithSelf() const {
     return false;
 }

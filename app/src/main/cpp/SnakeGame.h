@@ -24,7 +24,14 @@ enum class GameMode {
     ENDLESS,      // 无尽模式
     CHALLENGE_1,   // 挑战关卡 1
     CHALLENGE_2,
-    CHALLENGE_3
+    CHALLENGE_3,
+    CHALLENGE_4,
+    CHALLENGE_5,
+    CHALLENGE_6,
+    CHALLENGE_7,
+    CHALLENGE_8,
+    CHALLENGE_9,
+    CHALLENGE_10
 };
 struct Vector2f {
     float x;
@@ -82,6 +89,17 @@ public:
     SnakeGame(float worldWidth, float worldHeight);
     void startChallengeLevel2();
     void startChallengeLevel3();
+    void startChallengeLevel4();
+    void startChallengeLevel5();
+    void startChallengeLevel6();
+    void startChallengeLevel7();
+    void startChallengeLevel8();
+    void startChallengeLevel9();
+    void startChallengeLevel10();
+
+    bool hasTimeLimit() const { return currentMode_ >= GameMode::CHALLENGE_4; }
+    float getTimeRemaining() const { return timeRemaining_; }
+    bool isTimeOut() const { return isTimeOut_; }
     void update(float deltaTime);
     void setRotation(float angle);
     float getRotation() const { return rotation_; }
@@ -175,7 +193,16 @@ private:
     float speedTimer_;
     float shieldTimer_;
     float magnetTimer_;
+    int maxScoreCh4_ = 0;
+    int maxScoreCh5_ = 0;
+    int maxScoreCh6_ = 0;
+    int maxScoreCh7_ = 0;
+    int maxScoreCh8_ = 0;
+    int maxScoreCh9_ = 0;
+    int maxScoreCh10_ = 0;
 
+    float timeRemaining_ = 0.0f;
+    bool isTimeOut_ = false;
     std::mt19937 rng_;
     std::vector<Vector2f> walls_;           // 存储所有墙壁的坐标
     GameMode currentMode_ = GameMode::ENDLESS; // 当前游戏模式
