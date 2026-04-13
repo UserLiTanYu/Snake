@@ -355,12 +355,21 @@ void SnakeGame::update(float deltaTime) {
     float eatRadius = 1.0f * scaleBase;
     Vector2f head = snake_.front();
 
+    // --- 迷宫模式专属逻辑：计时与检测到达出口 ---
+    bool isRacingMode = (currentMode_ == GameMode::CHALLENGE_4 ||
+                         currentMode_ == GameMode::CHALLENGE_5 ||
+                         currentMode_ == GameMode::CHALLENGE_6 ||
+                         currentMode_ == GameMode::CHALLENGE_7);
+
+    if (isRacingMode) {
     // --- 迷宮模式專屬邏輯：計時與檢測到達出口 ---
     if (currentMode_ == GameMode::CHALLENGE_7 || currentMode_ == GameMode::CHALLENGE_8 || currentMode_ == GameMode::CHALLENGE_9) {
         mazeTimeElapsed_ += deltaTime;
         float ex = snake_[0].x - mazeExit_.x;
         float ey = snake_[0].y - mazeExit_.y;
-        if (std::sqrt(ex*ex + ey*ey) < 2.0f) {
+
+        if (std::sqrt(ex*ex + ey*ey) < 2.5f) { // 抵达出口区域
+            score_ = static_cast<int>(mazeTimeElapsed_); // 将最终秒数暂存到 score_ 中传给UI
             state_ = GameState::CHALLENGE_CLEAR;
             return;
         }
@@ -445,7 +454,8 @@ void SnakeGame::update(float deltaTime) {
     // --- 补充场地道具与食物 ---
     // --- 補充場地道具與食物 (排除第七關與第八關迷宮) ---
     // --- 补充场地道具与食物 (排除第七、八、九关迷宫) ---
-    if (currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_8 && currentMode_ != GameMode::CHALLENGE_9) {
+    if (currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_8 && currentMode_ != GameMode::CHALLENGE_9&& currentMode_ != GameMode::CHALLENGE_4 && currentMode_ != GameMode::CHALLENGE_5 &&currentMode_ != GameMode::CHALLENGE_6) {
+    if (currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_4 && currentMode_ != GameMode::CHALLENGE_5 &&currentMode_ != GameMode::CHALLENGE_6) {
         while (foods_.size() < 90) spawnFood();
         if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
             spawnFood();
@@ -953,7 +963,16 @@ void SnakeGame::checkAIVsAITail() {
 
 
 int SnakeGame::calculateStars(GameMode mode, int score) const {
+    // 竞速类关卡：分数(score)实际上是通关所用秒数，越小越好
+    if (mode == GameMode::CHALLENGE_4 || mode == GameMode::CHALLENGE_5 ||
+        mode == GameMode::CHALLENGE_6 || mode == GameMode::CHALLENGE_7) {
+        if (score <= 0) return 0; // 0代表还没通关过
 
+        int star3 = 0, star2 = 0, star1 = 0;
+        if (mode == GameMode::CHALLENGE_4) { star3 = 25; star2 = 45; star1 = 60; }
+        else if (mode == GameMode::CHALLENGE_5) { star3 = 35; star2 = 60; star1 = 80; }
+        else if (mode == GameMode::CHALLENGE_6) { star3 = 45; star2 = 75; star1 = 90; }
+        else if (mode == GameMode::CHALLENGE_7) { star3 = 120; star2 = 240; star1 = 360; }
     // --- 迷宫模式特殊计星：score 代表秒数，越小越好 ---
     if (mode == GameMode::CHALLENGE_7) {
         if (score == 0) return 0;        // <--- 核心修复：0 代表还没玩过，直接 0 星
@@ -980,13 +999,20 @@ int SnakeGame::calculateStars(GameMode mode, int score) const {
         return 0;                        // > 6分钟：0星
     }
 
-    int target = 60; // 預設值
+        if (score <= star3) return 3;
+        if (score <= star2) return 2;
+        if (score <= star1) return 1;
+        return 0; // 超时或太久0星
+    }
 
-    // 自動根據不同關卡設定正確的目標分數
+    // 吞噬类关卡：分数越大越好
+    int target = 60;
     switch (mode) {
-        case GameMode::CHALLENGE_1: target = 30; break; // 對齊第一關任務
+        case GameMode::CHALLENGE_1: target = 30; break;
         case GameMode::CHALLENGE_2: target = 60; break;
         case GameMode::CHALLENGE_3: target = 80; break;
+        case GameMode::CHALLENGE_8: target = 160; break;
+        case GameMode::CHALLENGE_9: target = 180; break;
         case GameMode::CHALLENGE_4: target = 80; break;
         case GameMode::CHALLENGE_5: target = 100; break;
         case GameMode::CHALLENGE_6: target = 120; break;
@@ -1328,6 +1354,160 @@ void SnakeGame::startChallengeLevel9() {
 BUILD_CHALLENGE_LEVEL(startChallengeLevel4, GameMode::CHALLENGE_4, 80, 120.0f) // 120秒限时
 BUILD_CHALLENGE_LEVEL(startChallengeLevel5, GameMode::CHALLENGE_5, 100, 110.0f)
 BUILD_CHALLENGE_LEVEL(startChallengeLevel6, GameMode::CHALLENGE_6, 120, 100.0f)
+void SnakeGame::buildTrackFromMap(const std::vector<std::string>& trackMap) {
+    walls_.clear();
+    int height = trackMap.size();
+    int width = trackMap[0].size();
+
+    float cellW = worldWidth_ / width;
+    float cellH = worldHeight_ / height;
+
+    for (int r = 0; r < height; ++r) {
+        for (int c = 0; c < width; ++c) {
+            char ch = trackMap[r][c];
+            float cx = c * cellW + cellW / 2.0f;
+            float cy = (height - 1 - r) * cellH + cellH / 2.0f; // Y轴翻转以对齐OpenGL
+
+            if (ch == '#') {
+                // 用密集粒子生成赛道墙壁
+                for (float wx = cx - cellW/2.0f; wx <= cx + cellW/2.0f; wx += 2.0f) {
+                    for (float wy = cy - cellH/2.0f; wy <= cy + cellH/2.0f; wy += 2.0f) {
+                        walls_.push_back({wx, wy});
+                    }
+                }
+            } else if (ch == 'S') { // 起点
+                Vector2f startPos = {cx, cy};
+                snake_.clear();
+                snake_.push_back(startPos);
+                for (int i = 1; i < 5; ++i) {
+                    snake_.push_back({startPos.x - i * 0.5f, startPos.y});
+                }
+            } else if (ch == 'E') { // 终点
+                mazeExit_ = {cx, cy};
+            }
+        }
+    }
+    rotation_ = 0.0f; // 开局强制朝向右边
+}
+
+// ==========================================
+// 挑战四：简单 U 型竞速赛道 (限时60秒)
+// ==========================================
+void SnakeGame::startChallengeLevel4() {
+    endlessArenaMode_ = false; reset();
+    currentMode_ = GameMode::CHALLENGE_4;
+    timeRemaining_ = 260.0f; mazeTimeElapsed_ = 0.0f; isTimeOut_ = false;
+    baseSpeed_ = 18.0f; aiSnakes_.clear(); foods_.clear(); powerUps_.clear();
+
+    std::vector<std::string> map = {
+            "########################################",
+            "#......................................#",
+            "#......................................#",
+            "#......##########################......#",
+            "#....##..........................##....#",
+            "#...#......##################......#...#",
+            "#..#.....##..................##.....#..#",
+            "#.#.....#......................#.....#.#",
+            "#.#....#........########........#....#.#",
+            "#.#...#.......##........##.......#...#.#",
+            "#.#...#......#............#......#...#.#",
+            "#.#...#......#............#......#...#.#",
+            "#.#...#......#............#......#...#.#",
+            "#.#...#.......##........##.......#...#.#",
+            "#.#....#........########........#....#.#",
+            "#.#.....#......................#.....#.#",
+            "#..#.....##..................##.....#..#",
+            "#...#......##################......#...#",
+            "#....##..........................##....#",
+            "#......############..############......#",
+            "#......................................#",
+            "#.........S.............E..............#",
+            "########################################"
+    };
+    buildTrackFromMap(map);
+    state_ = GameState::PLAYING;
+}
+
+// ==========================================
+// 挑战五：折返跑之字形赛道 (限时80秒)
+// 特点：极度密集的折返跑，通道忽宽忽窄，极速考验玩家的横向微操能力
+// ==========================================
+void SnakeGame::startChallengeLevel5() {
+    endlessArenaMode_ = false; reset();
+    currentMode_ = GameMode::CHALLENGE_5;
+    timeRemaining_ = 280.0f; mazeTimeElapsed_ = 0.0f; isTimeOut_ = false;
+    baseSpeed_ = 10.0f; // 速度提升
+    aiSnakes_.clear(); foods_.clear(); powerUps_.clear();
+
+    std::vector<std::string> map = {
+            "########################################",
+            "#S.....##......##......##......##......#",
+            "######.##.####.##.####.##.####.##.####.#",
+            "######.##.####.##.####.##.####.##.####.#",
+            "##.....##.##...##.##...##.##...##.##...#",
+            "##.######.##.#######.#######.#######.###",
+            "##.######.##.#######.#######.#######.###",
+            "##.....##.##...##.##...##.##...##.##...#",
+            "######.##.####.##.####.##.####.##.####.#",
+            "######.##.####.##.####.##.####.##.####.#",
+            "#......##......##......##......##......#",
+            "#.####################################.#",
+            "#.####################################.#",
+            "#......................................#",
+            "######################################.#",
+            "######################################.#",
+            "#......................................#",
+            "#.######################################",
+            "#.######################################",
+            "#......................................#",
+            "######################################.#",
+            "#......................................E",
+            "########################################"
+    };
+    buildTrackFromMap(map);
+    state_ = GameState::PLAYING;
+}
+
+// ==========================================
+// 挑战六：死亡螺旋赛道 (限时90秒)
+// 特点：上半部分为1格宽度的地狱级急转弯，下半部分为层层相套的向心窄缝螺旋
+// ==========================================
+void SnakeGame::startChallengeLevel6() {
+    endlessArenaMode_ = false; reset();
+    currentMode_ = GameMode::CHALLENGE_6;
+    timeRemaining_ = 290.0f; mazeTimeElapsed_ = 0.0f; isTimeOut_ = false;
+    baseSpeed_ = 25.0f; // 极高移速测试极限反应
+    aiSnakes_.clear(); foods_.clear(); powerUps_.clear();
+
+    std::vector<std::string> map = {
+            "########################################",
+            "#S.#.....#.......#.......#.......#.....#",
+            "##.#.###.#.#####.#.#####.#.#####.#.###.#",
+            "##.#.#.#.#.#...#.#.#...#.#.#...#.#.#.#.#",
+            "##.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#",
+            "##.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#",
+            "##...#...#...#...#...#...#...#...#...#.#",
+            "######################################.#",
+            "#......................................#",
+            "#.######################################",
+            "#.#....................................#",
+            "#.#.##################################.#",
+            "#.#.#................................#.#",
+            "#.#.#.##############################.#.#",
+            "#.#.#.#............................#.#.#",
+            "#.#.#.#.##########################.#.#.#",
+            "#.#.#.#.#........................#.#.#.#",
+            "#.#.#.#.#.######################.#.#.#.#",
+            "#.#.#.#.#........................#.#.#.#",
+            "#.#.#.#.##########################.#.#.#",
+            "#.#.#..............................#.#.#",
+            "#.#.################################.#.#",
+            "#......................................E",
+            "########################################"
+    };
+    buildTrackFromMap(map);
+    state_ = GameState::PLAYING;
+}
 //BUILD_CHALLENGE_LEVEL(startChallengeLevel7, GameMode::CHALLENGE_7, 140, 90.0f)
 //BUILD_CHALLENGE_LEVEL(startChallengeLevel8, GameMode::CHALLENGE_8, 160, 80.0f)
 //BUILD_CHALLENGE_LEVEL(startChallengeLevel9, GameMode::CHALLENGE_9, 180, 70.0f)

@@ -1527,7 +1527,8 @@ void Renderer::render() {
             drawShape(wall.x - camX, wall.y - camY, 2.0f, 2.0f, 0.4f, 0.4f, 0.4f, 1.0f);
         }
 
-        if (game_.getCurrentMode() == GameMode::CHALLENGE_7 || game_.getCurrentMode() == GameMode::CHALLENGE_8 || game_.getCurrentMode() == GameMode::CHALLENGE_9) {
+        if (game_.getCurrentMode() == GameMode::CHALLENGE_7||game_.getCurrentMode() == GameMode::CHALLENGE_4||game_.getCurrentMode() == GameMode::CHALLENGE_5||game_.getCurrentMode() == GameMode::CHALLENGE_6||game_.getCurrentMode() == GameMode::CHALLENGE_8||game_.getCurrentMode() == GameMode::CHALLENGE_9) {
+
             Vector2f exitPos = game_.getMazeExit();
             static float portalRot = 0.0f;
             portalRot += deltaTime * 1.5f;

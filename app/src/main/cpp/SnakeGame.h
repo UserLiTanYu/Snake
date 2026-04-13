@@ -175,6 +175,7 @@ private:
     void checkAIvsPlayerTail();
     void checkAIHeadToHeadCollisions();
     void checkPlayerVsAI();
+    void buildTrackFromMap(const std::vector<std::string>& trackMap);
     void spawnFoodFromDeadAI(const AISnake& ai);
     static void followSegments(std::vector<Vector2f>& segments, float segmentDistance);
     bool checkCollisionWithSelf() const;
