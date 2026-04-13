@@ -917,3 +917,31 @@ int SnakeGame::getChallengeStars(GameMode mode) const {
 bool SnakeGame::checkCollisionWithSelf() const {
     return false;
 }
+#define BUILD_CHALLENGE_LEVEL(LEVEL_FUNC, MODE, TARGET_SCORE, TIME_LIMIT) \
+void SnakeGame::LEVEL_FUNC() { \
+    endlessArenaMode_ = false; reset(); \
+    currentMode_ = MODE; challengeTargetScore_ = TARGET_SCORE; \
+    baseSpeed_ = 14.0f; timeRemaining_ = TIME_LIMIT; isTimeOut_ = false; \
+    float step = 2.0f; \
+    float leftX = worldWidth_ * 0.15f; float rightX = worldWidth_ * 0.85f; \
+    float topY = worldHeight_ * 0.85f; float botY = worldHeight_ * 0.15f; \
+    float len = worldWidth_ * 0.2f; \
+    for (float x = leftX; x <= leftX + len; x += step) walls_.push_back({x, topY}); \
+    for (float y = topY - len; y <= topY; y += step) walls_.push_back({leftX, y}); \
+    for (float x = rightX - len; x <= rightX; x += step) walls_.push_back({x, topY}); \
+    for (float y = topY - len; y <= topY; y += step) walls_.push_back({rightX, y}); \
+    for (float x = leftX; x <= leftX + len; x += step) walls_.push_back({x, botY}); \
+    for (float y = botY; y <= botY + len; y += step) walls_.push_back({leftX, y}); \
+    for (float x = rightX - len; x <= rightX; x += step) walls_.push_back({x, botY}); \
+    for (float y = botY; y <= botY + len; y += step) walls_.push_back({rightX, y}); \
+    for (int i = 0; i < 4; ++i) spawnOneAISnake(); \
+    state_ = GameState::PLAYING; \
+}
+
+BUILD_CHALLENGE_LEVEL(startChallengeLevel4, GameMode::CHALLENGE_4, 80, 120.0f) // 120秒限时
+BUILD_CHALLENGE_LEVEL(startChallengeLevel5, GameMode::CHALLENGE_5, 100, 110.0f)
+BUILD_CHALLENGE_LEVEL(startChallengeLevel6, GameMode::CHALLENGE_6, 120, 100.0f)
+BUILD_CHALLENGE_LEVEL(startChallengeLevel7, GameMode::CHALLENGE_7, 140, 90.0f)
+BUILD_CHALLENGE_LEVEL(startChallengeLevel8, GameMode::CHALLENGE_8, 160, 80.0f)
+BUILD_CHALLENGE_LEVEL(startChallengeLevel9, GameMode::CHALLENGE_9, 180, 70.0f)
+BUILD_CHALLENGE_LEVEL(startChallengeLevel10, GameMode::CHALLENGE_10, 200, 60.0f) // 极致挑战

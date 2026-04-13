@@ -183,6 +183,9 @@ Renderer::Renderer(android_app *pApp) :
     game_.setMaxScore(GameMode::CHALLENGE_1, loadChallengeScore((int)GameMode::CHALLENGE_1));
     game_.setMaxScore(GameMode::CHALLENGE_2, loadChallengeScore((int)GameMode::CHALLENGE_2));
     game_.setMaxScore(GameMode::CHALLENGE_3, loadChallengeScore((int)GameMode::CHALLENGE_3));
+    for(int m = (int)GameMode::CHALLENGE_4; m <= (int)GameMode::CHALLENGE_10; ++m) {
+        game_.setMaxScore((GameMode)m, loadChallengeScore(m));
+    }
     lastFrameTime_ = std::chrono::steady_clock::now();
 }
 
@@ -617,6 +620,13 @@ void Renderer::loadTextTextures() {
     textTextures_["level_1"] = createTextTexture("第一关", 40);
     textTextures_["level_2"] = createTextTexture("第二关", 40);
     textTextures_["level_3"] = createTextTexture("第三关", 40);
+    textTextures_["level_4"] = createTextTexture("第四关", 40);
+    textTextures_["level_5"] = createTextTexture("第五关", 40);
+    textTextures_["level_6"] = createTextTexture("第六关", 40);
+    textTextures_["level_7"] = createTextTexture("第七关", 40);
+    textTextures_["level_8"] = createTextTexture("第八关", 40);
+    textTextures_["level_9"] = createTextTexture("第九关", 40);
+    textTextures_["level_10"] = createTextTexture("第十关", 40);
     textTextures_["victory"] = createTextTexture("挑战成功!", 50);
     textTextures_["next_level"] = createTextTexture("下一关", 40);
     textTextures_["retry"] = createTextTexture("重新挑战", 40);

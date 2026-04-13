@@ -39,6 +39,7 @@ public:
     GameState getGameState() { return game_.getState(); }
 
 private:
+    TextTexture timeProgressTex_;
     TextTexture challengeProgressTex_;
     void initRenderer();
     void updateRenderArea();
