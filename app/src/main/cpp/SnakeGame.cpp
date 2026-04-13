@@ -168,7 +168,7 @@ void SnakeGame::spawnOneAISnake() {
     aiSnakes_.push_back(std::move(ai));
 }
 void SnakeGame::tickPeriodicAISpawn(float deltaTime) {
-    bool useAI = endlessArenaMode_ || currentMode_ == GameMode::CHALLENGE_2 || currentMode_ == GameMode::CHALLENGE_3;
+    bool useAI = endlessArenaMode_ || currentMode_ == GameMode::CHALLENGE_2 ;
     if (!useAI || state_ != GameState::PLAYING) return;
 
     aiSpawnTimer_ -= deltaTime;
@@ -180,7 +180,7 @@ void SnakeGame::tickPeriodicAISpawn(float deltaTime) {
     int maxAi = 0;
     if (endlessArenaMode_) maxAi = kMaxAiSnakes;
     else if (currentMode_ == GameMode::CHALLENGE_2) maxAi = 33;  // 挑战二：3条机器蛇
-    else if (currentMode_ == GameMode::CHALLENGE_3) maxAi = 20;  // 挑战三：6条机器蛇
+
 
     if (aiSnakes_.size() < static_cast<size_t>(maxAi)) {
         spawnOneAISnake();
@@ -217,7 +217,11 @@ void SnakeGame::startChallengeLevel1() {
     reset();
 
     currentMode_ = GameMode::CHALLENGE_1;
-    challengeTargetScore_ = 5;
+    challengeTargetScore_ = 30;
+
+    // --- 新增：20秒倒计时 ---
+    timeRemaining_ = 20.0f;
+    isTimeOut_ = false;
 
     float spawnX = worldWidth_ * 0.5f;
     float spawnY = worldHeight_ * 0.5f;
@@ -809,6 +813,10 @@ void SnakeGame::startChallengeLevel2() {
     currentMode_ = GameMode::CHALLENGE_2;
     challengeTargetScore_ = 60;
 
+    // --- 新增：40秒倒计时 ---
+    timeRemaining_ = 30.0f;
+    isTimeOut_ = false;
+
     // 修复问题三：提高第二关初始速度（由于AI共用该基准速度，AI也会变快）
     baseSpeed_ = 13.0f;
 
@@ -844,7 +852,11 @@ void SnakeGame::startChallengeLevel3() {
     endlessArenaMode_ = false;
     reset();
     currentMode_ = GameMode::CHALLENGE_3;
-    challengeTargetScore_ = 60;
+    challengeTargetScore_ = 80;
+
+    // --- 新增：60秒倒计时 ---
+    timeRemaining_ = 60.0f;
+    isTimeOut_ = false;
 
     // 修复问题三：第三关拥有极致的魔鬼速度
     baseSpeed_ = 20.0f;
@@ -868,7 +880,7 @@ void SnakeGame::startChallengeLevel3() {
     }
 
     // 修复问题四：为第三关生成大批量、极高移速的机器蛇
-    for (int i = 0; i < 6; ++i) spawnOneAISnake();
+    //for (int i = 0; i < 6; ++i) spawnOneAISnake();
 
     state_ = GameState::PLAYING;
 }
@@ -906,11 +918,22 @@ void SnakeGame::checkAIVsAITail() {
 
 
 int SnakeGame::calculateStars(GameMode mode, int score) const {
-    if (isTimeOut_) return 0; // 超时直接 0 星
-    int target = 60;
-    if (mode == GameMode::CHALLENGE_1) target = 5;
-    else if (mode == GameMode::CHALLENGE_2) target = 60;
-    else target = 80; // 3关至10关默认目标
+    int target = 60; // 預設值
+
+    // 自動根據不同關卡設定正確的目標分數
+    switch (mode) {
+        case GameMode::CHALLENGE_1: target = 30; break; // 對齊第一關任務
+        case GameMode::CHALLENGE_2: target = 60; break;
+        case GameMode::CHALLENGE_3: target = 80; break;
+        case GameMode::CHALLENGE_4: target = 80; break;
+        case GameMode::CHALLENGE_5: target = 100; break;
+        case GameMode::CHALLENGE_6: target = 120; break;
+        case GameMode::CHALLENGE_7: target = 140; break;
+        case GameMode::CHALLENGE_8: target = 160; break;
+        case GameMode::CHALLENGE_9: target = 180; break;
+        case GameMode::CHALLENGE_10: target = 200; break;
+        default: target = 60; break;
+    }
 
     if (score >= target) return 3;
     if (score >= target * 2 / 3) return 2;

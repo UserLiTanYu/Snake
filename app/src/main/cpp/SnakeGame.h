@@ -97,7 +97,8 @@ public:
     void startChallengeLevel9();
     void startChallengeLevel10();
 
-    bool hasTimeLimit() const { return currentMode_ >= GameMode::CHALLENGE_4; }
+    // --- 核心修改：让挑战模式所有关卡都开启倒计时功能 ---
+    bool hasTimeLimit() const { return currentMode_ >= GameMode::CHALLENGE_1; }
     float getTimeRemaining() const { return timeRemaining_; }
     bool isTimeOut() const { return isTimeOut_; }
     void update(float deltaTime);

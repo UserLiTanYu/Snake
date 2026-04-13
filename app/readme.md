@@ -42,3 +42,13 @@ A circular sphere containing a glowing deep space nebula, stars, purple and deep
 
 純粹黃金 (Solid Gold Chrome):
 A perfectly smooth shiny gold sphere, chrome reflection, luxurious, premium game asset, circular icon, high gloss.
+
+
+1.返回主界面按钮加大一点，参考商城界面大小
+2.五角星歪了，旋转一下
+3."第一关"字体偏“瘦高”，修改一下
+4.关卡布局修改一下，一个界面是个关卡，一行五个
+5.目标进度字体换个颜色，把目标说清楚，放在左上角
+6.挑战成功界面修改一下，风格和之前靠拢，加上本次挑战获得了几颗星
+7.挑战结果没有保存，退出游戏就没了
+8.建议：部分关卡可以设置一个挑战时间，超过挑战时间就不能继续

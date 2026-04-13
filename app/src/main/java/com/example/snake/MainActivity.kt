@@ -338,10 +338,12 @@ class MainActivity : GameActivity() {
         )
     }
     @Keep
-    fun showTimeOutDialog(score: Int) {
+    fun showTimeOutDialog(stars: Int, score: Int) {
+        val starStr = "⭐".repeat(stars) + "☆".repeat(3 - stars)
         showCuteDialog(
             title = "时间到了！", // ⏰
-            message = "哎呀，动作有点慢哦！\n\n当前长度: $score\n\n差一点点就通关了，再抓紧点时间吧！",
+            // --- 核心修改：在 message 中加入 本次评级: $starStr ---
+            message = "哎呀，动作有点慢哦！\n\n本次评级: $starStr\n当前长度: $score\n\n差一点点就通关了，再抓紧点时间吧！",
             posText = "重新挑战",
             negText = "返回主界面",
             onPos = { nativeRestartGame() },

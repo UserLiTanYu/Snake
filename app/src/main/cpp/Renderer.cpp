@@ -1605,30 +1605,53 @@ void Renderer::render() {
             drawShape(bX, bY, 6.0f, 6.0f, 1.0f, 0.8f, 0.0f, 1.0f, false, 0.0f, 0, false, true);
         }
         // ==== 绘制局内挑战目标进度 ====
+        // ==== 绘制局内挑战目标进度 ====
+        // ==== 繪製局內挑戰目標進度 ====
         if (currentState == GameState::PLAYING && !game_.isEndlessArenaMode()) {
             if (game_.hasTimeLimit()) {
                 static int lastTimeVal = -1;
+                // --- 優化：加入關卡檢查，確保切換關卡時 UI 即時刷新 ---
+                static GameMode lastTimeMode = GameMode::ENDLESS;
+
                 int curTime = (int)game_.getTimeRemaining();
-                if (curTime != lastTimeVal || timeProgressTex_.id == 0) {
+                GameMode curMode = game_.getCurrentMode();
+
+                // --- 修改：使用居中對齊的方法生成文字貼圖 ---
+                if (curTime != lastTimeVal || curMode != lastTimeMode || timeProgressTex_.id == 0) {
                     lastTimeVal = curTime;
+                    lastTimeMode = curMode;
                     if (timeProgressTex_.id) glDeleteTextures(1, &timeProgressTex_.id);
+
                     std::string timeStr = u8"倒计时: " + std::to_string(curTime) + "s";
-                    // 红色警示颜色当时间小于10秒
                     int color = curTime <= 10 ? 0xFFFF4444 : 0xFFFFAA00;
-                    timeProgressTex_ = createTextTextureColoredLeft(timeStr, 64, color);
+
+                    // 改為使用 createTextTextureColored (居中對齊版本)
+                    timeProgressTex_ = createTextTextureColored(timeStr, 64, color);
                 }
+
                 if (timeProgressTex_.id) {
                     float tw = std::min(12.0f, timeProgressTex_.width);
                     float th = tw * (timeProgressTex_.height / std::max(timeProgressTex_.width, 0.01f));
-                    float drawX = worldHalfWidth - tw * 0.5f - 1.0f;
+
+                    // --- 核心修改：將 drawX 設為 0.0f，使其在螢幕水平居中 ---
+                    float drawX = 0.0f;
+
+                    // 繪製倒計時，位置保持在頂部附近 (kProjectionHalfHeight - 2.5f)
                     drawShape(drawX, kProjectionHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, timeProgressTex_.id);
                 }
             }
+
             static int lastProgScore = -1;
+            // --- 新增：记录上一次的目标分数，防止切关卡时不刷新 ---
+            static int lastTarget = -1;
+
             int curScore = game_.getScore();
             int target = game_.getChallengeTarget();
-            if (curScore != lastProgScore || challengeProgressTex_.id == 0) {
+
+            // --- 修改：加入 target != lastTarget 的判断 ---
+            if (curScore != lastProgScore || target != lastTarget || challengeProgressTex_.id == 0) {
                 lastProgScore = curScore;
+                lastTarget = target; // 更新记录
                 if (challengeProgressTex_.id) glDeleteTextures(1, &challengeProgressTex_.id);
 
                 std::string progStr = u8"吃到食物: " + std::to_string(curScore) + " / " + std::to_string(target);
@@ -1637,7 +1660,6 @@ void Renderer::render() {
             if (challengeProgressTex_.id) {
                 float tw = std::min(15.0f, challengeProgressTex_.width);
                 float th = tw * (challengeProgressTex_.height / std::max(challengeProgressTex_.width, 0.01f));
-                // 【修改】：改到屏幕左上角
                 float drawX = -worldHalfWidth + tw * 0.5f + 1.0f;
                 drawShape(drawX, kProjectionHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, challengeProgressTex_.id);
             }
@@ -2270,8 +2292,9 @@ void Renderer::triggerGameOver() {
 
         // 新增：区分超时失败和撞击失败
         if (game_.isTimeOut()) {
-            jmethodID method = env->GetMethodID(clazz, "showTimeOutDialog", "(I)V");
-            if (method) env->CallVoidMethod(activityObj, method, (jint)score);
+            int stars = game_.calculateStars(game_.getCurrentMode(), score);
+            jmethodID method = env->GetMethodID(clazz, "showTimeOutDialog", "(II)V");
+            if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)score);
         } else {
             int stars = game_.calculateStars(game_.getCurrentMode(), score);
             jmethodID method = env->GetMethodID(clazz, "showChallengeFailDialog", "(II)V");
