@@ -1675,7 +1675,7 @@ void Renderer::render() {
                     else if (curMode == GameMode::CHALLENGE_8) { t3=90; t2=150; t1=240; }
                     else if (curMode == GameMode::CHALLENGE_9) { t3=180; t2=240; t1=360; }
 
-                    goalTitleTex = createTextTextureColoredLeft(u8"挑战目标：", 52, 0xFFFFCC00);
+                    goalTitleTex = createTextTextureColoredLeft(u8"挑战目标：", 48, 0xFFFFCC00);
                     // 使用实心文本星号 ★ (U+2605) 替换 Emoji ⭐
                     goal3Tex = createTextTextureColoredLeft(u8"★★★: \u2264" + std::to_string(t3) + u8"秒", 52, 0xFFFFFFFF);
                     goal2Tex = createTextTextureColoredLeft(u8"★★☆: \u2264" + std::to_string(t2) + u8"秒", 52, 0xFFDDDDDD);
