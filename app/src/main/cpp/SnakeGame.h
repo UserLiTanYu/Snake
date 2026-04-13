@@ -98,7 +98,8 @@ public:
     void startChallengeLevel10();
 
     // --- 核心修改：让挑战模式所有关卡都开启倒计时功能 ---
-    bool hasTimeLimit() const { return currentMode_ >= GameMode::CHALLENGE_1; }
+    // --- 核心修改：让挑战模式有倒计时，但排除第七关(迷宫模式) ---
+    bool hasTimeLimit() const { return currentMode_ >= GameMode::CHALLENGE_1 && currentMode_ != GameMode::CHALLENGE_7; }
     float getTimeRemaining() const { return timeRemaining_; }
     bool isTimeOut() const { return isTimeOut_; }
     void update(float deltaTime);
@@ -158,6 +159,8 @@ public:
     std::vector<RankEntry> getLengthLeaderboard() const;
     std::vector<RankPanelRow> getRankPanelRows() const;
     GameMode getCurrentMode() const { return currentMode_; }
+    float getMazeTimeElapsed() const { return mazeTimeElapsed_; }
+    Vector2f getMazeExit() const { return mazeExit_; }
 private:
     void spawnFood();
     void spawnPowerUp();
@@ -215,6 +218,9 @@ private:
     int maxScoreCh8_ = 0;
     int maxScoreCh9_ = 0;
     int maxScoreCh10_ = 0;
+
+    float mazeTimeElapsed_ = 0.0f;
+    Vector2f mazeExit_ = {0.0f, 0.0f};
 
     float timeRemaining_ = 0.0f;
     bool isTimeOut_ = false;

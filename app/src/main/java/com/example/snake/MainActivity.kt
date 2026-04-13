@@ -366,6 +366,18 @@ class MainActivity : GameActivity() {
         )
     }
     @Keep
+    fun showMazeClearDialog(stars: Int, timeUsed: Int) {
+        val starStr = "⭐".repeat(stars) + "☆".repeat(3 - stars)
+        showCuteDialog(
+            title = "逃出迷宫！ \uD83C\uDF1F", // 🌟
+            message = "太棒了，你成功找到了出口！\n\n获得评级: $starStr\n最终用时: ${timeUsed}秒",
+            posText = "再次挑战",
+            negText = "返回主界面",
+            onPos = { nativeRestartGame() },
+            onNeg = { nativeGoToMainMenu() }
+        )
+    }
+    @Keep
     fun getTextPixels(text: String, fontSize: Int): IntArray {
         val paint = Paint()
         paint.textSize = fontSize.toFloat()
@@ -602,6 +614,8 @@ class MainActivity : GameActivity() {
             dialog.show()
         }
     }
+
+
 
     private external fun nativeRestartGame()
     private external fun nativeGoToMainMenu()

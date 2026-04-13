@@ -355,6 +355,18 @@ void SnakeGame::update(float deltaTime) {
     float eatRadius = 1.0f * scaleBase;
     Vector2f head = snake_.front();
 
+    // --- 迷宫模式专属逻辑：计时与检测到达出口 ---
+    if (currentMode_ == GameMode::CHALLENGE_7) {
+        mazeTimeElapsed_ += deltaTime;
+        float ex = snake_[0].x - mazeExit_.x;
+        float ey = snake_[0].y - mazeExit_.y;
+        if (std::sqrt(ex*ex + ey*ey) < 2.0f) { // 抵达出口区域
+            //score_ = static_cast<int>(mazeTimeElapsed_); // 将秒数暂存到 score_ 中
+            state_ = GameState::CHALLENGE_CLEAR;
+            return;
+        }
+    }
+
     if (magnetTimer_ > 0.0f) {
         float magnetRadius = 4.0f * scaleBase;
         float pullSpeed = 25.0f * scaleBase;
@@ -432,13 +444,15 @@ void SnakeGame::update(float deltaTime) {
     }
 
     // --- 补充场地道具与食物 ---
-    while (foods_.size() < 90) spawnFood();
-    if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
-        spawnFood();
-    }
-    while (powerUps_.size() < 3) spawnPowerUp();
-    if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
-        spawnPowerUp();
+    if (currentMode_ != GameMode::CHALLENGE_7) {
+        while (foods_.size() < 90) spawnFood();
+        if (foods_.size() < 150 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.15f) {
+            spawnFood();
+        }
+        while (powerUps_.size() < 3) spawnPowerUp();
+        if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
+            spawnPowerUp();
+        }
     }
 }
 
@@ -785,12 +799,29 @@ void SnakeGame::move(float deltaTime) {
         }
     }
 
-    snake_[0] = nextHead;
-    followSegments(snake_, currentSegDist);
-
-
-    // 1. 墙壁碰撞检测
-    if (shieldTimer_ <= 0.0f) {
+// 1. 墙壁碰撞检测
+    if (currentMode_ == GameMode::CHALLENGE_7) {
+        // 迷宫模式：碰到墙壁不死，而是像物理引擎一样顺着墙滑动
+        for (const auto& wall : walls_) {
+            float dx = nextHead.x - wall.x;
+            float dy = nextHead.y - wall.y;
+            float dist = std::sqrt(dx*dx + dy*dy);
+            float minDist = collisionRadius + wallRadius_;
+            if (dist < minDist && dist > 0.001f) {
+                // 将蛇头沿着碰撞法向推出墙壁
+                float overlap = minDist - dist;
+                nextHead.x += (dx / dist) * overlap;
+                nextHead.y += (dy / dist) * overlap;
+            }
+        }
+        // 确保不会飞出世界地图
+        if (nextHead.x < 0.5f) nextHead.x = 0.5f;
+        if (nextHead.x > worldWidth_ - 0.5f) nextHead.x = worldWidth_ - 0.5f;
+        if (nextHead.y < 0.5f) nextHead.y = 0.5f;
+        if (nextHead.y > worldHeight_ - 0.5f) nextHead.y = worldHeight_ - 0.5f;
+    }
+    else if (shieldTimer_ <= 0.0f) {
+        // 其他模式：撞墙即死
         for (const auto& wall : walls_) {
             float dx = head.x - wall.x;
             float dy = head.y - wall.y;
@@ -800,6 +831,9 @@ void SnakeGame::move(float deltaTime) {
             }
         }
     }
+
+    snake_[0] = nextHead;
+    followSegments(snake_, currentSegDist);
 
     // 2. 目标分数通关检测 (适当调高挑战分数)
     if (currentMode_ == GameMode::CHALLENGE_1 && score_ >= challengeTargetScore_) state_ = GameState::CHALLENGE_CLEAR;
@@ -918,6 +952,14 @@ void SnakeGame::checkAIVsAITail() {
 
 
 int SnakeGame::calculateStars(GameMode mode, int score) const {
+
+    if (mode == GameMode::CHALLENGE_7) {
+        if (score <= 120) return 3;      // < 2分钟：3星
+        else if (score <= 240) return 2; // 2~4分钟：2星
+        else if (score <= 360) return 1; // 4~6分钟：1星
+        return 0;                        // > 6分钟：0星
+    }
+
     int target = 60; // 預設值
 
     // 自動根據不同關卡設定正確的目標分數
@@ -981,10 +1023,111 @@ void SnakeGame::LEVEL_FUNC() { \
     state_ = GameState::PLAYING; \
 }
 
+void SnakeGame::startChallengeLevel7() {
+    endlessArenaMode_ = false;
+    reset();
+    currentMode_ = GameMode::CHALLENGE_7;
+    mazeTimeElapsed_ = 0.0f;
+    // 配合复杂的 DFS 迷宫，将基础速度稍微调低一点，增加操控容错率
+    baseSpeed_ = 14.0f;
+
+    // --- 动态生成迷宫地图 (DFS Algorithm) ---
+    const int WIDTH = 45;
+    const int HEIGHT = 30;
+    // 使用二维向量 (std::vector) 全部填充为墙壁 '#'
+    std::vector<std::vector<char>> maze(HEIGHT, std::vector<char>(WIDTH, '#'));
+
+    // 初始化随机数生成器 (Random Number Generator)
+    std::random_device rd;
+    std::mt19937 g(rd());
+
+    // 使用 C++ Lambda 表达式实现深度优先搜索 (Depth-First Search)
+    auto dfs = [&](auto& self, int r, int c) -> void {
+        maze[r][c] = '.'; // 标记为可走的路
+
+        int dr[] = { -2, 2, 0, 0 };
+        int dc[] = { 0, 0, -2, 2 };
+        std::vector<int> dirs = { 0, 1, 2, 3 };
+
+        // 随机打乱方向 (Shuffle) 保证迷宫的随机性
+        std::shuffle(dirs.begin(), dirs.end(), g);
+
+        for (int i : dirs) {
+            int next_r = r + dr[i];
+            int next_c = c + dc[i];
+
+            // 检查边界
+            if (next_r >= 1 && next_r < HEIGHT - 1 && next_c >= 1 && next_c < WIDTH - 1) {
+                if (maze[next_r][next_c] == '#') {
+                    // 打通中间的墙壁
+                    maze[r + dr[i] / 2][c + dc[i] / 2] = '.';
+                    // 递归深入
+                    self(self, next_r, next_c);
+                }
+            }
+        }
+    };
+
+    // 从左上角开始挖掘迷宫
+    dfs(dfs, 1, 1);
+    maze[1][1] = 's'; // 标记起点
+
+    // 逆向扫描寻找最右下角的路作为终点
+    bool end_found = false;
+    for (int r = HEIGHT - 2; r > 0 && !end_found; --r) {
+        for (int c = WIDTH - 2; c > 0 && !end_found; --c) {
+            if (maze[r][c] == '.') {
+                maze[r][c] = 'e';
+                end_found = true;
+            }
+        }
+    }
+
+    // --- 将字符迷宫映射到 3D 游戏世界的物理引擎中 ---
+    Vector2f startPos = {10.0f, 10.0f}; // 默认备用起点
+    walls_.clear();
+
+    for (int r = 0; r < HEIGHT; ++r) {
+        for (int c = 0; c < WIDTH; ++c) {
+            // 每个字符代表游戏中 4x4 的区域
+            float cx = c * 4.0f + 2.0f;
+            // 反转 Y 轴坐标，让二维数组的视觉方向和 OpenGL 一致
+            float cy = (HEIGHT - 1 - r) * 4.0f + 2.0f;
+
+            if (maze[r][c] == '#') {
+                // 生成四个密集粒子来组成坚固的墙壁
+                for(float wx = cx - 1.0f; wx <= cx + 1.0f; wx += 2.0f) {
+                    for(float wy = cy - 1.0f; wy <= cy + 1.0f; wy += 2.0f) {
+                        walls_.push_back({wx, wy});
+                    }
+                }
+            } else if (maze[r][c] == 's') {
+                startPos = {cx, cy}; // 获取真实的出生点物理坐标
+            } else if (maze[r][c] == 'e') {
+                mazeExit_ = {cx, cy}; // 获取真实的出口物理坐标
+            }
+        }
+    }
+
+    // --- 设置蛇的出生状态 ---
+    snake_.clear();
+    snake_.push_back(startPos);
+    for(int i = 1; i < 5; ++i) {
+        snake_.push_back({startPos.x, startPos.y - i * 0.5f});
+    }
+    rotation_ = M_PI / 2.0f; // 开局朝上
+
+    foods_.clear();
+    powerUps_.clear();
+    aiSnakes_.clear();
+
+    state_ = GameState::PLAYING;
+}
+
 BUILD_CHALLENGE_LEVEL(startChallengeLevel4, GameMode::CHALLENGE_4, 80, 120.0f) // 120秒限时
 BUILD_CHALLENGE_LEVEL(startChallengeLevel5, GameMode::CHALLENGE_5, 100, 110.0f)
 BUILD_CHALLENGE_LEVEL(startChallengeLevel6, GameMode::CHALLENGE_6, 120, 100.0f)
-BUILD_CHALLENGE_LEVEL(startChallengeLevel7, GameMode::CHALLENGE_7, 140, 90.0f)
+//BUILD_CHALLENGE_LEVEL(startChallengeLevel7, GameMode::CHALLENGE_7, 140, 90.0f)
 BUILD_CHALLENGE_LEVEL(startChallengeLevel8, GameMode::CHALLENGE_8, 160, 80.0f)
 BUILD_CHALLENGE_LEVEL(startChallengeLevel9, GameMode::CHALLENGE_9, 180, 70.0f)
 BUILD_CHALLENGE_LEVEL(startChallengeLevel10, GameMode::CHALLENGE_10, 200, 60.0f) // 极致挑战

@@ -109,12 +109,12 @@ void main() {
 
     if (uIsStar) {
         vec2 q = p * 2.0;
-        float angle = atan(q.y, q.x) + 0.942478; // 旋转90度让星尖朝上
+        float angle = atan(q.y, q.x) + 0.942478;
         float n = 5.0;
         float twopi = 6.2831853;
         float halfAtnt = twopi / (n * 2.0);
         float atnt = abs(mod(angle, twopi / n) - halfAtnt);
-        float rad = 0.35 / cos(atnt + 0.6); // 调节 0.6 可以改变星芒的尖锐程度
+        float rad = 0.35 / cos(atnt + 0.6);
         float r = length(q);
         alpha = smoothstep(rad + 0.02, rad - 0.02, r);
     } else if (uIsGear) {
@@ -149,7 +149,7 @@ void main() {
 
 Renderer::Renderer(android_app *pApp) :
         app_(pApp), display_(EGL_NO_DISPLAY), surface_(EGL_NO_SURFACE), context_(EGL_NO_CONTEXT),
-        width_(0), height_(0), shaderNeedsNewProjectionMatrix_(true), game_(180.0f, 120.0f),
+        width_(0), height_(0), game_(180.0f, 120.0f),
         joystickTiltX_(0), joystickTiltY_(0), joystickPointerId_(-1), boostPointerId_(-1),
         joyPixelX_(0), joyPixelY_(0), wasGameOver_(false), pendingRestart_(false), pendingMainMenu_(false),
         startBackgroundTextureId_(0), gameBackgroundTextureId_(0), playingBackgroundTextureId_(0),challengeBackgroundTextureId_(0),
@@ -194,6 +194,7 @@ Renderer::~Renderer() {
     clearRankPanelCache();
     releaseRankPlayerStatTextures();
     releaseHeadNameTexCache();
+    if (timeProgressTex_.id) glDeleteTextures(1, &timeProgressTex_.id);
     if (challengeProgressTex_.id) glDeleteTextures(1, &challengeProgressTex_.id);
     if (startBackgroundTextureId_) glDeleteTextures(1, &startBackgroundTextureId_);
     if (gameBackgroundTextureId_) glDeleteTextures(1, &gameBackgroundTextureId_);
@@ -263,7 +264,6 @@ void Renderer::saveChallengeScore(int mode, int score) {
     if (nd) app_->activity->vm->DetachCurrentThread();
 }
 
-// 【新增】：读取挑战最高分
 int Renderer::loadChallengeScore(int mode) {
     JNIEnv *env; bool nd = false;
     if (app_->activity->vm->GetEnv((void**)&env, JNI_VERSION_1_6) == JNI_EDETACHED) { app_->activity->vm->AttachCurrentThread(&env, nullptr); nd = true; }
@@ -700,7 +700,6 @@ void Renderer::loadTextTextures() {
     textTextures_["rank_expand"] = createTextTexture("排行榜 (点击展开)", 60);
     textTextures_["rank_close_hint"] = createTextTexture("排行榜 (点击关闭)", 60);
 
-    // --- 修改：设置局内名字，替代原有的设置按钮贴图 ---
     textTextures_["edit_name"] = createTextTexture("修改昵称", 160);
     textTextures_["head_names_on"] = createTextTexture("显示名字: 开", 160);
     textTextures_["head_names_off"] = createTextTexture("显示名字: 关", 160);
@@ -709,9 +708,9 @@ void Renderer::loadTextTextures() {
 namespace {
     const char* utf8RankMedalPrefix(int rank) {
         switch (rank) {
-            case 1: return "\xf0\x9f\xa5\x87 ";  // 🥇
-            case 2: return "\xf0\x9f\xa5\x88 ";  // 🥈
-            case 3: return "\xf0\x9f\xa5\x89 ";  // 🥉
+            case 1: return "\xf0\x9f\xa5\x87 ";
+            case 2: return "\xf0\x9f\xa5\x88 ";
+            case 3: return "\xf0\x9f\xa5\x89 ";
             default: return "";
         }
     }
@@ -915,7 +914,6 @@ void Renderer::syncRankPlayerStatTextures() {
     std::string killsLine = std::string(u8"\u51fb\u6740 ") + std::to_string(kills);
     constexpr int kBlueArgb = 0xFF33AAFF;
 
-    // --- 核心修改：使用严格左对齐的方式生成高清文字贴图 ---
     rankPlayerLenTex_ = createTextTextureColoredLeft(lenLine, 56, kBlueArgb);
     if (rankPlayerLenTex_.id == 0) rankPlayerLenTex_ = createTextTextureLeft(lenLine, 56);
 
@@ -926,11 +924,11 @@ void Renderer::syncRankPlayerStatTextures() {
     if (rankPlayerKillsTex_.id == 0) rankPlayerKillsTex_ = createTextTextureLeft(killsLine, 56);
 }
 
-void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
+void Renderer::drawEndlessRankPanel(float uiHalfWidth) {
     if (!game_.isEndlessArenaMode()) return;
     syncRankPanelTextures();
 
-    const float left = -worldHalfWidth + 1.0f;
+    const float left = -uiHalfWidth + 1.0f;
     const float topY = kProjectionHalfHeight - 2.2f;
 
     const float padX = 0.38f;
@@ -1003,9 +1001,7 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
             float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
             float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
 
-            // --- 核心修改：固定一个绝对靠左的 X 坐标 ---
             float statLeftX = panelRight + margin;
-            // 针对不同宽度的贴图，独立计算它们的中心点，实现完美左对齐
             float cx1 = statLeftX + tw1 * 0.5f;
             float cx2 = statLeftX + tw2 * 0.5f;
             float cx3 = statLeftX + tw3 * 0.5f;
@@ -1014,7 +1010,6 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
             float yScore = yLen - th1 * 0.5f - 0.25f - th2 * 0.5f;
             float yKills = yScore - th2 * 0.5f - 0.25f - th3 * 0.5f;
 
-            // 使用独立计算的 cx 进行渲染
             drawShape(cx1, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
             drawShape(cx2, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
             drawShape(cx3, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
@@ -1092,7 +1087,6 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
         float tw3 = std::min(7.8f, rankPlayerKillsTex_.width);
         float th3 = tw3 * (rankPlayerKillsTex_.height / std::max(rankPlayerKillsTex_.width, 0.01f));
 
-        // --- 核心修改：固定一个绝对靠左的 X 坐标 ---
         float statLeftX = panelRight + margin;
         float cx1 = statLeftX + tw1 * 0.5f;
         float cx2 = statLeftX + tw2 * 0.5f;
@@ -1102,7 +1096,6 @@ void Renderer::drawEndlessRankPanel(float worldHalfWidth) {
         float yScore = yLen - th1 * 0.5f - 0.25f - th2 * 0.5f;
         float yKills = yScore - th2 * 0.5f - 0.25f - th3 * 0.5f;
 
-        // 使用独立计算的 cx 进行渲染
         drawShape(cx1, yLen, tw1, th1, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerLenTex_.id);
         drawShape(cx2, yScore, tw2, th2, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerScoreTex_.id);
         drawShape(cx3, yKills, tw3, th3, 1.0f, 1.0f, 1.0f, 0.95f, false, 0.0f, rankPlayerKillsTex_.id);
@@ -1212,48 +1205,45 @@ void Renderer::triggerReturnMenuDialog() {
 }
 
 void Renderer::render() {
-        if (pendingRestart_.load()) restartGame();
-        if (pendingMainMenu_.load()) goToMainMenu();
+    if (pendingRestart_.load()) restartGame();
+    if (pendingMainMenu_.load()) goToMainMenu();
 
-        if (pendingExitDialog_.load()) {
-            pendingExitDialog_.store(false);
-            triggerExitDialog();
-        }
+    if (pendingExitDialog_.load()) {
+        pendingExitDialog_.store(false);
+        triggerExitDialog();
+    }
 
-        if (pendingReturnMenuDialog_.load()) {
-            pendingReturnMenuDialog_.store(false);
-            triggerReturnMenuDialog();
-        }
+    if (pendingReturnMenuDialog_.load()) {
+        pendingReturnMenuDialog_.store(false);
+        triggerReturnMenuDialog();
+    }
 
-        auto now = std::chrono::steady_clock::now();
-        float deltaTime = std::chrono::duration<float>(now - lastFrameTime_).count();
-        lastFrameTime_ = now;
-        if (deltaTime > 0.033f) deltaTime = 0.033f;
+    auto now = std::chrono::steady_clock::now();
+    float deltaTime = std::chrono::duration<float>(now - lastFrameTime_).count();
+    lastFrameTime_ = now;
+    if (deltaTime > 0.033f) deltaTime = 0.033f;
 
-        game_.setEquippedSkin(getEquippedSkin());
-        game_.update(deltaTime);
+    game_.setEquippedSkin(getEquippedSkin());
+    game_.update(deltaTime);
 
-        // --- 核心修改：动态更新玩家名字按钮贴图 ---
-        static std::string lastMenuPlayerName = "";
-        static float nameUpdateTimer = 0.0f;
-        nameUpdateTimer -= deltaTime;
-        if (nameUpdateTimer <= 0.0f) {
-            nameUpdateTimer = 0.5f; // 每 0.5 秒检查一次，避免频繁调用 JNI 导致卡顿
-            std::string currentName = fetchPlayerDisplayName();
+    // --- 动态更新玩家名字按钮贴图 ---
+    static std::string lastMenuPlayerName = "";
+    static float nameUpdateTimer = 0.0f;
+    nameUpdateTimer -= deltaTime;
+    if (nameUpdateTimer <= 0.0f) {
+        nameUpdateTimer = 0.5f;
+        std::string currentName = fetchPlayerDisplayName();
 
-            // 防御性判断：防止万一获取到的名字为空导致按钮消失
-            if (currentName.empty()) currentName = "玩家";
+        if (currentName.empty()) currentName = "玩家";
 
-            // 只有当名字发生真正改变时，才清理旧内存并重新生成贴图
-            if (currentName != lastMenuPlayerName) {
-                lastMenuPlayerName = currentName;
-                if (textTextures_.count("edit_name") && textTextures_["edit_name"].id != 0) {
-                    glDeleteTextures(1, &textTextures_["edit_name"].id);
-                }
-                textTextures_["edit_name"] = createTextTexture(currentName, 160);
+        if (currentName != lastMenuPlayerName) {
+            lastMenuPlayerName = currentName;
+            if (textTextures_.count("edit_name") && textTextures_["edit_name"].id != 0) {
+                glDeleteTextures(1, &textTextures_["edit_name"].id);
             }
+            textTextures_["edit_name"] = createTextTexture(currentName, 160);
         }
-        // --------------------------------------
+    }
 
     GameState currentState = game_.getState();
     GameState renderState = currentState;
@@ -1263,7 +1253,6 @@ void Renderer::render() {
     }
 
     if (renderState != lastBgmState_) {
-        // --- 移除了 MENU_SETTINGS ---
         if (renderState == GameState::START_SCREEN || renderState == GameState::MODE_SELECTION) {
             playBgm(1);
         } else if (renderState == GameState::PLAYING) {
@@ -1293,13 +1282,25 @@ void Renderer::render() {
     }
 
     updateRenderArea();
-    if (shaderNeedsNewProjectionMatrix_) {
-        float projectionMatrix[16] = {0};
-        Utility::buildOrthographicMatrix(projectionMatrix, kProjectionHalfHeight, (float)width_/height_, -1.f, 1.f);
-        shader_->activate();
-        shader_->setProjectionMatrix(projectionMatrix);
-        shaderNeedsNewProjectionMatrix_ = false;
+
+    // --- 核心修改：雙軌投影矩陣設置 ---
+    float aspect = (float)width_ / height_;
+    float uiProjHalfHeight = kProjectionHalfHeight; // 固定的 22.0f
+    float worldProjHalfHeight = uiProjHalfHeight;
+
+    // 如果是迷宮模式(第七關)，將主世界視角拉近一倍！
+    if (game_.getCurrentMode() == GameMode::CHALLENGE_7 &&
+        (currentState == GameState::PLAYING || currentState == GameState::GAME_OVER || currentState == GameState::CHALLENGE_CLEAR || currentState == GameState::PAUSED)) {
+        worldProjHalfHeight = 11.0f; // 視角變小，鏡頭放大
     }
+
+    float uiHalfWidth = uiProjHalfHeight * aspect;
+
+    float worldProjMatrix[16] = {0};
+    Utility::buildOrthographicMatrix(worldProjMatrix, worldProjHalfHeight, aspect, -1.f, 1.f);
+
+    float uiProjMatrix[16] = {0};
+    Utility::buildOrthographicMatrix(uiProjMatrix, uiProjHalfHeight, aspect, -1.f, 1.f);
 
     glClearColor(0.01f, 0.01f, 0.03f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -1307,89 +1308,95 @@ void Renderer::render() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     shader_->activate();
 
-    float aspect = (float)width_ / height_;
-    float worldHalfWidth = kProjectionHalfHeight * aspect;
     if (currentState == GameState::CHALLENGE_CLEAR && !wasChallengeClear_) {
         wasChallengeClear_ = true;
-        playSfx(1); // 播放胜利音效
+        //playSfx(1); // 播放過關音效
 
         int earnedCoins = game_.getScore() * 20;
         addCoins(earnedCoins);
 
         int curScore = game_.getScore();
         int savedMax = game_.getMaxScore(game_.getCurrentMode());
-        if (curScore > savedMax) {
-            game_.setMaxScore(game_.getCurrentMode(), curScore);
-            saveChallengeScore((int)game_.getCurrentMode(), curScore);
-        }
+        int stars = 0; // 準備用來接收星星數
 
-        int stars = game_.getChallengeStars(game_.getCurrentMode());
-
-        // ==========================================
-        // ★ 使用 JNI 调用 Kotlin 的通关弹窗方法 ★
-        // ==========================================
         JNIEnv *env;
         bool needsDetach = false;
-
-        // 1. 获取 JNI 环境
         if (app_->activity->vm->GetEnv((void **) &env, JNI_VERSION_1_6) == JNI_EDETACHED) {
-            if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return; // 注意这里我也加上了你的判空防御
+            if (app_->activity->vm->AttachCurrentThread(&env, nullptr) != 0) return;
             needsDetach = true;
         }
-
-        // 2. 获取 GameActivity 对象 (修复了报错的地方)
         jobject activityObj = app_->activity->javaGameActivity;
         jclass clazz = env->GetObjectClass(activityObj);
 
-        // 3. 找到你的 Kotlin 方法
-        jmethodID method = env->GetMethodID(clazz, "showChallengeClearDialog", "(II)V");
+        // --- 核心修復：根據模式分開處理結算邏輯 ---
+        if (game_.getCurrentMode() == GameMode::CHALLENGE_7) {
+            // 迷宮模式：直接讀取真實耗時，越短越好
+            int mazeTime = (int)game_.getMazeTimeElapsed();
+            if (savedMax == 0 || mazeTime < savedMax) {
+                game_.setMaxScore(game_.getCurrentMode(), mazeTime);
+                saveChallengeScore((int)game_.getCurrentMode(), mazeTime);
+            }
+            // 使用時間來計算迷宮星星
+            stars = game_.calculateStars(game_.getCurrentMode(), mazeTime);
 
-        // 4. 发起调用，传入星星和分数
-        if (method) {
-            env->CallVoidMethod(activityObj, method, (jint)stars, (jint)curScore);
+            jmethodID method = env->GetMethodID(clazz, "showMazeClearDialog", "(II)V");
+            if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)mazeTime);
+
+        } else {
+            // 其他模式：讀取分數，越高越好
+            if (curScore > savedMax) {
+                game_.setMaxScore(game_.getCurrentMode(), curScore);
+                saveChallengeScore((int)game_.getCurrentMode(), curScore);
+            }
+            // 使用分數來計算普通關卡星星
+            stars = game_.getChallengeStars(game_.getCurrentMode());
+
+            jmethodID method = env->GetMethodID(clazz, "showChallengeClearDialog", "(II)V");
+            if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)curScore);
         }
 
-        // 5. 异常清理与释放
         if (env->ExceptionCheck()) env->ExceptionClear();
-        env->DeleteLocalRef(clazz); // 释放局部引用是个好习惯
+        env->DeleteLocalRef(clazz);
         if (needsDetach) app_->activity->vm->DetachCurrentThread();
-        // ==========================================
     }
+
+    // --- 開始繪製不同狀態的畫面 ---
     if (renderState == GameState::START_SCREEN) {
+        shader_->setProjectionMatrix(uiProjMatrix);
         if (startBackgroundTextureId_) {
-            drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, startBackgroundTextureId_);
+            drawShape(0, 0, uiHalfWidth * 2.0f, uiProjHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, startBackgroundTextureId_);
         }
         drawButton(0, -10.0f, 20.0f, 8.0f, 0.0f, 1.0f, 0.7f, true, "start");
-        // 去掉了主界面的文字设置按钮
     }
     else if (renderState == GameState::MODE_SELECTION) {
+        shader_->setProjectionMatrix(uiProjMatrix);
         if (currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY) {
             if (gameBackgroundTextureId_) {
-                drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, gameBackgroundTextureId_);
+                drawShape(0, 0, uiHalfWidth * 2.0f, uiProjHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, gameBackgroundTextureId_);
             }
             drawButton(-32.0f, -8.0f, 18.0f, 18.0f, 0.1f, 0.6f, 1.0f, true, "endless");
             drawButton(0, -8.0f, 18.0f, 18.0f, 0.7f, 0.2f, 1.0f, false, "challenge");
             drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.2f, 0.9f, 0.4f, false, "more");
 
-            // --- 核心布局修改 ---
             drawButton(32.0f, 12.0f, 16.0f, 5.0f, 0.9f, 0.6f, 0.1f, true, "store_btn");
-            drawButton(32.0f, 5.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn"); // 皮肤移到商店下方
-            drawButton(-32.0f, 12.0f, 16.0f, 5.0f, 0.35f, 0.75f, 0.95f, true, "edit_name"); // 修改名字放在左侧
+            drawButton(32.0f, 5.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn");
+            drawButton(-32.0f, 12.0f, 16.0f, 5.0f, 0.35f, 0.75f, 0.95f, true, "edit_name");
         }
     }
     else if (renderState == GameState::CHALLENGE_SELECTION) {
+        shader_->setProjectionMatrix(uiProjMatrix);
         if (gameBackgroundTextureId_) {
-            drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, challengeBackgroundTextureId_);
+            drawShape(0, 0, uiHalfWidth * 2.0f, uiProjHalfHeight * 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, challengeBackgroundTextureId_);
         }
-        drawButton(-worldHalfWidth + 9.0f, 17.0f, 14.0f, 4.5f, 0.8f, 0.3f, 0.3f, true, "main_menu");
+        drawButton(-uiHalfWidth + 9.0f, 17.0f, 14.0f, 4.5f, 0.8f, 0.3f, 0.3f, true, "main_menu");
         int cols = 5;
-        float boxW = 8.5f;  // 圆形关卡底座直径
-        float startX = -22.0f; // 起始X位置
-        float spacingX = 11.0f; // 间距
-        float startY = -1.0f;   // 起始Y位置 (下半区域)
+        float boxW = 8.5f;
+        float startX = -22.0f;
+        float spacingX = 11.0f;
+        float startY = -1.0f;
         float spacingY = 13.0f;
 
-        for (int i = 0; i < 10; ++i) { // 总计10关占位
+        for (int i = 0; i < 10; ++i) {
             int row = i / cols;
             int col = i % cols;
             float px = startX + col * spacingX;
@@ -1399,7 +1406,7 @@ void Renderer::render() {
             if(i%3==1){ r=0.8f; g=0.6f; b=0.1f; }
             else if(i%3==2){ r=0.9f; g=0.2f; b=0.2f; }
 
-            drawShape(px, py, boxW, boxW, r, g, b, 1.0f, true); // 圆形底座
+            drawShape(px, py, boxW, boxW, r, g, b, 1.0f, true);
 
             std::string lvlKey = "level_" + std::to_string(i + 1);
             if (textTextures_.count(lvlKey)) {
@@ -1421,6 +1428,9 @@ void Renderer::render() {
         }
     }
     else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER|| renderState == GameState::CHALLENGE_CLEAR) {
+
+        // ========= 第一部分：繪製遊戲世界 =========
+        shader_->setProjectionMatrix(worldProjMatrix); // 切換到世界視角
 
         const auto& snake = game_.getSnake();
         static Vector2f lastCamPos = {90.0f, 60.0f};
@@ -1512,11 +1522,17 @@ void Renderer::render() {
                 drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, fr, fg, fb, 1.0f, true);
             }
         }
-        // 4. 在这里插入：绘制墙壁
+
         for (const auto& wall : game_.getWalls()) {
-            // 假设墙壁是灰色的，大小为 2.0f
-            // 使用 drawShape(x, y, width, height, r, g, b, alpha)
             drawShape(wall.x - camX, wall.y - camY, 2.0f, 2.0f, 0.4f, 0.4f, 0.4f, 1.0f);
+        }
+
+        if (game_.getCurrentMode() == GameMode::CHALLENGE_7) {
+            Vector2f exitPos = game_.getMazeExit();
+            static float portalRot = 0.0f;
+            portalRot += deltaTime * 1.5f;
+            drawShape(exitPos.x - camX, exitPos.y - camY, 7.0f, 7.0f, 0.2f, 1.0f, 0.4f, 0.8f, true, 0.0f, 0, false, false, portalRot, true);
+            drawShape(exitPos.x - camX, exitPos.y - camY, 4.0f, 4.0f, 0.8f, 1.0f, 0.8f, 1.0f, true);
         }
 
         for (const auto& ai : game_.getAISnakes()) {
@@ -1591,92 +1607,101 @@ void Renderer::render() {
             }
         }
 
+        // ========= 第二部分：繪製懸浮 UI =========
+        shader_->setProjectionMatrix(uiProjMatrix); // 切換回絕對 UI 視角
+
         if (currentState == GameState::PLAYING) {
-            float joyX = -worldHalfWidth + 18.0f, joyY = -kProjectionHalfHeight + 14.0f;
-            joyPixelX_ = (joyX / worldHalfWidth + 1.0f) * 0.5f * (float)width_;
-            joyPixelY_ = (1.0f - (joyY / kProjectionHalfHeight + 1.0f) * 0.5f) * (float)height_;
+            float joyX = -uiHalfWidth + 18.0f, joyY = -uiProjHalfHeight + 14.0f;
+            joyPixelX_ = (joyX / uiHalfWidth + 1.0f) * 0.5f * (float)width_;
+            joyPixelY_ = (1.0f - (joyY / uiProjHalfHeight + 1.0f) * 0.5f) * (float)height_;
             drawShape(joyX, joyY, 13.5f, 13.5f, 1.0f, 1.0f, 1.0f, 0.15f, true);
             drawShape(joyX + joystickTiltX_*5.0f, joyY + joystickTiltY_*5.0f, 6.0f, 6.0f, 1.0f, 1.0f, 1.0f, 0.5f, true);
 
-            float bX = worldHalfWidth - 16.0f, bY = -kProjectionHalfHeight + 14.0f;
+            float bX = uiHalfWidth - 16.0f, bY = -uiProjHalfHeight + 14.0f;
             float boostAlpha = (boostPointerId_ != -1) ? 0.7f : 0.3f;
 
             drawShape(bX, bY, 11.0f, 11.0f, 1.0f, 1.0f, 1.0f, boostAlpha, true);
             drawShape(bX, bY, 6.0f, 6.0f, 1.0f, 0.8f, 0.0f, 1.0f, false, 0.0f, 0, false, true);
         }
+
         // ==== 绘制局内挑战目标进度 ====
-        // ==== 绘制局内挑战目标进度 ====
-        // ==== 繪製局內挑戰目標進度 ====
         if (currentState == GameState::PLAYING && !game_.isEndlessArenaMode()) {
-            if (game_.hasTimeLimit()) {
-                static int lastTimeVal = -1;
-                // --- 優化：加入關卡檢查，確保切換關卡時 UI 即時刷新 ---
-                static GameMode lastTimeMode = GameMode::ENDLESS;
+            GameMode curMode = game_.getCurrentMode();
+            static int lastTimeVal = -1;
+            static GameMode lastTimeMode = GameMode::ENDLESS;
 
-                int curTime = (int)game_.getTimeRemaining();
-                GameMode curMode = game_.getCurrentMode();
-
-                // --- 修改：使用居中對齊的方法生成文字貼圖 ---
+            if (curMode == GameMode::CHALLENGE_7) {
+                int curTime = (int)game_.getMazeTimeElapsed();
                 if (curTime != lastTimeVal || curMode != lastTimeMode || timeProgressTex_.id == 0) {
                     lastTimeVal = curTime;
                     lastTimeMode = curMode;
                     if (timeProgressTex_.id) glDeleteTextures(1, &timeProgressTex_.id);
-
-                    std::string timeStr = u8"倒计时: " + std::to_string(curTime) + "s";
-                    int color = curTime <= 10 ? 0xFFFF4444 : 0xFFFFAA00;
-
-                    // 改為使用 createTextTextureColored (居中對齊版本)
-                    timeProgressTex_ = createTextTextureColored(timeStr, 64, color);
+                    std::string timeStr = u8"用时: " + std::to_string(curTime) + "s";
+                    timeProgressTex_ = createTextTextureColored(timeStr, 64, 0xFF55DDFF);
                 }
-
                 if (timeProgressTex_.id) {
                     float tw = std::min(12.0f, timeProgressTex_.width);
                     float th = tw * (timeProgressTex_.height / std::max(timeProgressTex_.width, 0.01f));
-
-                    // --- 核心修改：將 drawX 設為 0.0f，使其在螢幕水平居中 ---
-                    float drawX = 0.0f;
-
-                    // 繪製倒計時，位置保持在頂部附近 (kProjectionHalfHeight - 2.5f)
-                    drawShape(drawX, kProjectionHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, timeProgressTex_.id);
+                    drawShape(0.0f, uiProjHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, timeProgressTex_.id);
                 }
             }
+            else {
+                if (game_.hasTimeLimit()) {
+                    int curTime = (int)game_.getTimeRemaining();
+                    if (curTime != lastTimeVal || curMode != lastTimeMode || timeProgressTex_.id == 0) {
+                        lastTimeVal = curTime;
+                        lastTimeMode = curMode;
+                        if (timeProgressTex_.id) glDeleteTextures(1, &timeProgressTex_.id);
 
-            static int lastProgScore = -1;
-            // --- 新增：记录上一次的目标分数，防止切关卡时不刷新 ---
-            static int lastTarget = -1;
+                        std::string timeStr = u8"倒计时: " + std::to_string(curTime) + "s";
+                        int color = curTime <= 10 ? 0xFFFF4444 : 0xFFFFAA00;
+                        timeProgressTex_ = createTextTextureColored(timeStr, 64, color);
+                    }
 
-            int curScore = game_.getScore();
-            int target = game_.getChallengeTarget();
+                    if (timeProgressTex_.id) {
+                        float tw = std::min(12.0f, timeProgressTex_.width);
+                        float th = tw * (timeProgressTex_.height / std::max(timeProgressTex_.width, 0.01f));
+                        float drawX = 0.0f;
+                        drawShape(drawX, uiProjHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, timeProgressTex_.id);
+                    }
+                }
 
-            // --- 修改：加入 target != lastTarget 的判断 ---
-            if (curScore != lastProgScore || target != lastTarget || challengeProgressTex_.id == 0) {
-                lastProgScore = curScore;
-                lastTarget = target; // 更新记录
-                if (challengeProgressTex_.id) glDeleteTextures(1, &challengeProgressTex_.id);
+                static int lastProgScore = -1;
+                static int lastTarget = -1;
 
-                std::string progStr = u8"吃到食物: " + std::to_string(curScore) + " / " + std::to_string(target);
-                challengeProgressTex_ = createTextTextureColoredLeft(progStr, 64, 0xFFFFD700);
-            }
-            if (challengeProgressTex_.id) {
-                float tw = std::min(15.0f, challengeProgressTex_.width);
-                float th = tw * (challengeProgressTex_.height / std::max(challengeProgressTex_.width, 0.01f));
-                float drawX = -worldHalfWidth + tw * 0.5f + 1.0f;
-                drawShape(drawX, kProjectionHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, challengeProgressTex_.id);
+                int curScore = game_.getScore();
+                int target = game_.getChallengeTarget();
+
+                if (curScore != lastProgScore || target != lastTarget || challengeProgressTex_.id == 0) {
+                    lastProgScore = curScore;
+                    lastTarget = target;
+                    if (challengeProgressTex_.id) glDeleteTextures(1, &challengeProgressTex_.id);
+
+                    std::string progStr = u8"吃到食物: " + std::to_string(curScore) + " / " + std::to_string(target);
+                    challengeProgressTex_ = createTextTextureColoredLeft(progStr, 64, 0xFFFFD700);
+                }
+                if (challengeProgressTex_.id) {
+                    float tw = std::min(15.0f, challengeProgressTex_.width);
+                    float th = tw * (challengeProgressTex_.height / std::max(challengeProgressTex_.width, 0.01f));
+                    float drawX = -uiHalfWidth + tw * 0.5f + 1.0f;
+                    drawShape(drawX, uiProjHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, challengeProgressTex_.id);
+                }
             }
         }
-        drawEndlessRankPanel(worldHalfWidth);
+        drawEndlessRankPanel(uiHalfWidth);
     }
 
     if (currentState != GameState::PAUSED && currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY && currentState != GameState::GAME_OVER) {
-        float gearX = worldHalfWidth - 4.0f;
-        float gearY = kProjectionHalfHeight - 4.0f;
+        shader_->setProjectionMatrix(uiProjMatrix);
+        float gearX = uiHalfWidth - 4.0f;
+        float gearY = uiProjHalfHeight - 4.0f;
         drawShape(gearX, gearY, 3.5f, 3.5f, 0.8f, 0.8f, 0.8f, 0.8f, false, 0.0f, 0, true);
     }
 
     if (currentState == GameState::PAUSED) {
-        drawShape(0, 0, worldHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 0.0f, 0.0f, 0.0f, 0.6f);
+        shader_->setProjectionMatrix(uiProjMatrix);
+        drawShape(0, 0, uiHalfWidth * 2.0f, uiProjHalfHeight * 2.0f, 0.0f, 0.0f, 0.0f, 0.6f);
 
-        // --- 核心：略微调高设置面板，以容纳新增的开关按钮 ---
         float boxW = 20.0f;
         float boxH = 34.0f;
         drawShape(0, -0.5f, boxW + 0.6f, boxH + 0.6f, 0.3f, 0.4f, 0.6f, 0.8f, false, 0.1f);
@@ -1684,14 +1709,13 @@ void Renderer::render() {
 
         auto& titleTex = textTextures_["settings"];
         float titleW = 5.5f;
-        float titleH = titleW * (titleTex.height / titleTex.width);
-        float titleY = (previousState_ == GameState::PLAYING) ? 13.0f : 12.0f;
+        float titleH = titleW * (titleTex.height / std::max(titleTex.width, 0.01f));
+        float titleY = (previousState_ == GameState::PLAYING) ? 14.0f : 12.0f;
         drawShape(0, titleY, titleW, titleH, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, titleTex.id);
 
         std::string musicLabel = isMusicOn_ ? "music_on" : "music_off";
         std::string sfxLabel = isSfxOn_ ? "sfx_on" : "sfx_off";
 
-        // 获取实时名字开关状态
         showSnakeHeadNamesCached_ = fetchShowSnakeHeadNames();
         std::string hnKey = showSnakeHeadNamesCached_ ? "head_names_on" : "head_names_off";
 
@@ -1703,21 +1727,21 @@ void Renderer::render() {
             float startY = 8.5f;
             drawButton(0, startY, btnW, btnH, 0.2f, 0.6f, 1.0f, true, musicLabel);
             drawButton(0, startY - gap, btnW, btnH, 0.2f, 0.6f, 1.0f, true, sfxLabel);
-            drawButton(0, startY - gap*2, btnW, btnH, 0.2f, 0.6f, 1.0f, true, hnKey); // 新增：样式和音效一致
+            drawButton(0, startY - gap*2, btnW, btnH, 0.2f, 0.6f, 1.0f, true, hnKey);
             drawButton(0, startY - gap*3, btnW, btnH, 0.1f, 0.8f, 0.3f, true, "resume");
             drawButton(0, startY - gap*4, btnW, btnH, 0.8f, 0.4f, 0.1f, true, "main_menu");
             drawButton(0, startY - gap*5, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
         } else {
-            // 从主界面进来的设置
             float startY = 6.25f;
             drawButton(0, startY, btnW, btnH, 0.2f, 0.6f, 1.0f, true, musicLabel);
             drawButton(0, startY - gap, btnW, btnH, 0.2f, 0.6f, 1.0f, true, sfxLabel);
-            drawButton(0, startY - gap*2, btnW, btnH, 0.2f, 0.6f, 1.0f, true, hnKey); // 新增：样式和音效一致
+            drawButton(0, startY - gap*2, btnW, btnH, 0.2f, 0.6f, 1.0f, true, hnKey);
             drawButton(0, startY - gap*3, btnW, btnH, 0.1f, 0.8f, 0.3f, true, "main_menu");
             drawButton(0, startY - gap*4, btnW, btnH, 0.9f, 0.2f, 0.2f, true, "quit");
         }
     }
     else if (currentState == GameState::STORE) {
+        shader_->setProjectionMatrix(uiProjMatrix);
         int currentCoins = getCoins();
         if (currentCoins != lastCoins_) {
             lastCoins_ = currentCoins;
@@ -1725,7 +1749,7 @@ void Renderer::render() {
             dynamicCoinText_ = createTextTexture("金币: " + std::to_string(currentCoins), 140);
         }
 
-        drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+        drawShape(0, 0, uiHalfWidth * 4.0f, uiProjHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         int cols = 5;
         float boxW = 11.5f;
@@ -1768,7 +1792,7 @@ void Renderer::render() {
             }
         }
 
-        drawShape(0, 24.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+        drawShape(0, 24.0f, uiHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         auto& titleTex = textTextures_["store_title"];
         drawShape(0.3f, 16.8f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
@@ -1783,7 +1807,8 @@ void Renderer::render() {
         drawButton(26.0f, 16.5f, 12.0f, 4.0f, 0.8f, 0.3f, 0.3f, true, "main_menu");
     }
     else if (currentState == GameState::SKIN_INVENTORY) {
-        drawShape(0, 0, worldHalfWidth * 4.0f, kProjectionHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+        shader_->setProjectionMatrix(uiProjMatrix);
+        drawShape(0, 0, uiHalfWidth * 4.0f, uiProjHalfHeight * 4.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         int equipped = getEquippedSkin();
 
@@ -1841,7 +1866,7 @@ void Renderer::render() {
             }
         }
 
-        drawShape(0, 24.0f, worldHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
+        drawShape(0, 24.0f, uiHalfWidth * 4.0f, 20.0f, 0.65f, 0.8f, 0.95f, 1.01f);
 
         auto& titleTex = textTextures_["inventory_title"];
         drawShape(0.3f, 17.3f, 16.0f, 16.0f * (titleTex.height / titleTex.width), 0.1f, 0.1f, 0.2f, 0.6f, false, 0.0f, titleTex.id);
@@ -1884,25 +1909,14 @@ void Renderer::drawShape(float x, float y, float sx, float sy, float r, float g,
     glDrawElements(GL_TRIANGLES, model.getIndexCount(), GL_UNSIGNED_SHORT, model.getIndexData());
 }
 
-// 在 Renderer.cpp 中替換此函數
 void Renderer::drawSnakeHeadEyes(float headX, float headY, float facingRad, float bodyRadius) {
-    // --- 極致大眼萌版修改 ---
-
-    // 1. 調整眼睛的形狀與位置
-    // 我們將 eyeR (eye radius) 大幅提升到 0.65f，這會讓眼睛佔據蛇頭大部分區域
     const float eyeR = bodyRadius * 0.65f;
-    // 為了防止兩隻巨型眼睛重疊，我們稍微調大 side (side spacing)
     const float side = bodyRadius * 0.58f;
-    // 稍微調整 fwd (forward offset)，讓眼睛貼近蛇頭的前端
     const float fwd = bodyRadius * 0.38f;
 
-    // 2. 瞳孔與高光參數
-    // 為了展現照片中那種呆萌感，pupilR (pupil radius) 必須很大
     const float pupilR = eyeR * 0.72f;
-    // h1R (primary highlight radius) 是主高光的大小
     const float h1R = pupilR * 0.50f;
 
-    // 方向向量計算
     const float fx = std::cos(facingRad);
     const float fy = std::sin(facingRad);
     const float lx = -std::sin(facingRad);
@@ -1913,22 +1927,16 @@ void Renderer::drawSnakeHeadEyes(float headX, float headY, float facingRad, floa
         const float ex = headX + fx * fwd + lx * (side * sf);
         const float ey = headY + fy * fwd + ly * (side * sf);
 
-        // a) 繪製超大眼白
         drawShape(ex, ey, eyeR, eyeR, 0.98f, 0.98f, 1.0f, 1.0f, true);
 
-        // b) 計算瞳孔中心並繪製
         const float pupilCx = ex + fx * (eyeR * 0.12f);
         const float pupilCy = ey + fy * (eyeR * 0.12f);
-        // 瞳孔顏色使用深藍黑，增加深邃感
         drawShape(pupilCx, pupilCy, pupilR, pupilR, 0.02f, 0.04f, 0.12f, 1.0f, true);
 
-        // c) 繪製靈魂高光 (Highlight)
-        // 主高光放在瞳孔上方偏外側
         const float h1OffX = -lx * (pupilR * 0.32f) + fx * (pupilR * 0.1f);
         const float h1OffY = -ly * (pupilR * 0.32f) + fy * (pupilR * 0.1f);
         drawShape(pupilCx + h1OffX, pupilCy + h1OffY, h1R, h1R, 1.0f, 1.0f, 1.0f, 1.0f, true);
 
-        // 小高光放在對角線位置，模擬眼睛的水潤感
         const float h2R = h1R * 0.4f;
         const float h2OffX = lx * (pupilR * 0.45f);
         const float h2OffY = ly * (pupilR * 0.45f);
@@ -1980,6 +1988,8 @@ void Renderer::handleInput() {
             float px = GameActivityPointerAxes_getX(&pointer);
             float py = GameActivityPointerAxes_getY(&pointer);
             float aspect = (float) width_ / height_;
+
+            // 所有 UI 點擊交互仍然基於標準的 22.0f 投影座標
             float nx = (px / (float) width_ * 2.0f - 1.0f) * aspect * kProjectionHalfHeight;
             float ny = (1.0f - py / (float) height_ * 2.0f) * kProjectionHalfHeight;
 
@@ -2005,7 +2015,6 @@ void Renderer::handleInput() {
                 }
             }
 
-            // ---------- 修复核心：解开混乱嵌套的 State 检查 ----------
             if (game_.getState() == GameState::START_SCREEN) {
                 if (abs(nx) < 10.0f && abs(ny + 10.0f) < 4.0f) {
                     playSfx(2);
@@ -2013,34 +2022,34 @@ void Renderer::handleInput() {
                 }
             }
             else if (game_.getState() == GameState::MODE_SELECTION) {
-                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { // Endless
+                if (abs(nx + 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
                     endlessArenaActive_ = true;
                     game_.setEndlessArenaMode(true);
                     clearRankPanelCache();
                     playSfx(2);
                     game_.reset();
                     game_.startGame();
-                } else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) { // Challenge
+                } else if (abs(nx) < 9.0f && abs(ny + 8.0f) < 9.0f) {
                     playSfx(2);
                     game_.setState(GameState::CHALLENGE_SELECTION);
-                } else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) { // More
+                } else if (abs(nx - 32.0f) < 9.0f && abs(ny + 8.0f) < 9.0f) {
                     endlessArenaActive_ = false;
                     game_.setEndlessArenaMode(false);
                     clearRankPanelCache();
                     playSfx(2);
                     game_.reset();
                     game_.startGame();
-                } else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) { // Store
+                } else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
                     previousState_ = game_.getState();
                     game_.setState(GameState::STORE);
                     storeScrollY_ = 0.0f;
                     playSfx(2);
-                } else if (abs(nx - 32.0f) < 8.0f && abs(ny - 5.0f) < 2.5f) {  // Inventory
+                } else if (abs(nx - 32.0f) < 8.0f && abs(ny - 5.0f) < 2.5f) {
                     previousState_ = game_.getState();
                     game_.setState(GameState::SKIN_INVENTORY);
                     inventoryScrollY_ = 0.0f;
                     playSfx(2);
-                } else if (abs(nx + 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) { // 修改昵称 (修复)
+                } else if (abs(nx + 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
                     showPlayerNameEditorDialog();
                     clearRankPanelCache();
                     releaseHeadNameTexCache();
@@ -2049,15 +2058,13 @@ void Renderer::handleInput() {
                 }
             }
             else if (game_.getState() == GameState::CHALLENGE_SELECTION) {
-                // 【修改1】：检测右上角大号的返回按钮
-                float worldHalfWidth = (float) width_ / height_ * 22.0f; // 动态计算屏幕半宽
+                float worldHalfWidth = (float) width_ / height_ * 22.0f;
                 if (abs(nx - (-worldHalfWidth + 9.0f)) < 7.0f && abs(ny - 17.0f) < 3.0f) {
                     playSfx(2);
                     game_.setState(GameState::MODE_SELECTION);
                     continue;
                 }
 
-                // 【修改4】：网格按钮点击判定
                 float startX = -22.0f;
                 float spacingX = 11.0f;
                 float startY = -1.0f;
@@ -2083,15 +2090,13 @@ void Renderer::handleInput() {
                     }
                 }
             }
-
-
             else if (game_.getState() == GameState::PLAYING) {
                 if (game_.isEndlessArenaMode() && hitEndlessRankPanel(nx, ny)) {
                     rankingPanelExpanded_ = !rankingPanelExpanded_;
                     playSfx(2);
                     continue;
                 }
-                // 修复：原先这里被包裹进了MODE_SELECTION，导致完全不触发
+
                 if (px < (float) width_ * 0.5f && joystickPointerId_ == -1)
                     joystickPointerId_ = pointer.id;
                 else if (px >= (float) width_ * 0.5f && boostPointerId_ == -1)
@@ -2268,6 +2273,7 @@ void Renderer::handleInput() {
 
     android_app_clear_motion_events(inputBuffer);
 }
+
 void Renderer::triggerGameOver() {
     JNIEnv *env;
     bool needsDetach = false;
@@ -2280,8 +2286,6 @@ void Renderer::triggerGameOver() {
 
     int score = game_.getScore();
 
-    // 判断当前是否是挑战模式 (你可以根据你实际的枚举或判断函数来写)
-    // 这里假设你有 getCurrentMode()，且模式不是 ENDLESS
     if (!game_.isEndlessArenaMode()) {
         int savedMax = game_.getMaxScore(game_.getCurrentMode());
         if (score > savedMax) {
@@ -2290,7 +2294,6 @@ void Renderer::triggerGameOver() {
             if (saveMethod) env->CallVoidMethod(activityObj, saveMethod, (jint)game_.getCurrentMode(), (jint)score);
         }
 
-        // 新增：区分超时失败和撞击失败
         if (game_.isTimeOut()) {
             int stars = game_.calculateStars(game_.getCurrentMode(), score);
             jmethodID method = env->GetMethodID(clazz, "showTimeOutDialog", "(II)V");
@@ -2302,7 +2305,6 @@ void Renderer::triggerGameOver() {
         }
     }
     else {
-        // 【无尽模式失败】: 原本的逻辑
         int earnedCoins = score * 10;
         jmethodID method = env->GetMethodID(clazz, "showGameOverDialog", "(II)V");
         if (method) env->CallVoidMethod(activityObj, method, (jint) score, (jint) earnedCoins);
@@ -2323,7 +2325,6 @@ void Renderer::restartGame() {
     joystickPointerId_ = -1;
     boostPointerId_ = -1;
 
-    // 根据模式启动
     if (game_.getCurrentMode() == GameMode::CHALLENGE_1) {
         game_.startChallengeLevel1();
     } else if (game_.getCurrentMode() == GameMode::CHALLENGE_2) {
@@ -2343,64 +2344,64 @@ void Renderer::restartGame() {
     }
 }
 
-    void Renderer::goToMainMenu() {
-        game_.setEndlessArenaMode(endlessArenaActive_);
-        game_.reset();
-        game_.setState(GameState::MODE_SELECTION);
-        wasGameOver_ = false;
-        wasChallengeClear_ = false;
-        pendingMainMenu_.store(false);
-        joystickTiltX_ = 0;
-        joystickTiltY_ = 0;
-        joystickPointerId_ = -1;
-        boostPointerId_ = -1;
-    }
+void Renderer::goToMainMenu() {
+    game_.setEndlessArenaMode(endlessArenaActive_);
+    game_.reset();
+    game_.setState(GameState::MODE_SELECTION);
+    wasGameOver_ = false;
+    wasChallengeClear_ = false;
+    pendingMainMenu_.store(false);
+    joystickTiltX_ = 0;
+    joystickTiltY_ = 0;
+    joystickPointerId_ = -1;
+    boostPointerId_ = -1;
+}
 
-    void Renderer::initRenderer() {
-        constexpr EGLint attribs[] = {EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_SURFACE_TYPE,
-                                      EGL_WINDOW_BIT, EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8,
-                                      EGL_RED_SIZE, 8, EGL_DEPTH_SIZE, 24, EGL_NONE};
-        auto display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-        eglInitialize(display, nullptr, nullptr);
-        EGLint numConfigs;
-        eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
-        std::unique_ptr<EGLConfig[]> supportedConfigs(new EGLConfig[numConfigs]);
-        eglChooseConfig(display, attribs, supportedConfigs.get(), numConfigs, &numConfigs);
-        EGLSurface surface = eglCreateWindowSurface(display, supportedConfigs[0], app_->window,
-                                                    nullptr);
-        EGLint contextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-        EGLContext context = eglCreateContext(display, supportedConfigs[0], nullptr,
-                                              contextAttribs);
-        eglMakeCurrent(display, surface, surface, context);
-        display_ = display;
-        surface_ = surface;
-        context_ = context;
-        shader_ = std::unique_ptr<Shader>(
-                Shader::loadShader(vertex, fragment, "inPosition", "inUV", "uProjection"));
-        if (shader_) shader_->activate();
-        createModels();
-        updateRenderArea();
-    }
+void Renderer::initRenderer() {
+    constexpr EGLint attribs[] = {EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_SURFACE_TYPE,
+                                  EGL_WINDOW_BIT, EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8,
+                                  EGL_RED_SIZE, 8, EGL_DEPTH_SIZE, 24, EGL_NONE};
+    auto display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    eglInitialize(display, nullptr, nullptr);
+    EGLint numConfigs;
+    eglChooseConfig(display, attribs, nullptr, 0, &numConfigs);
+    std::unique_ptr<EGLConfig[]> supportedConfigs(new EGLConfig[numConfigs]);
+    eglChooseConfig(display, attribs, supportedConfigs.get(), numConfigs, &numConfigs);
+    EGLSurface surface = eglCreateWindowSurface(display, supportedConfigs[0], app_->window,
+                                                nullptr);
+    EGLint contextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
+    EGLContext context = eglCreateContext(display, supportedConfigs[0], nullptr,
+                                          contextAttribs);
+    eglMakeCurrent(display, surface, surface, context);
+    display_ = display;
+    surface_ = surface;
+    context_ = context;
+    shader_ = std::unique_ptr<Shader>(
+            Shader::loadShader(vertex, fragment, "inPosition", "inUV", "uProjection"));
+    if (shader_) shader_->activate();
+    createModels();
+    updateRenderArea();
+}
 
-    void Renderer::updateRenderArea() {
-        EGLint width, height;
-        eglQuerySurface(display_, surface_, EGL_WIDTH, &width);
-        eglQuerySurface(display_, surface_, EGL_HEIGHT, &height);
-        if (width > 0 && height > 0 && (width != width_ || height != height_)) {
-            width_ = width;
-            height_ = height;
-            glViewport(0, 0, width, height);
-            shaderNeedsNewProjectionMatrix_ = true;
-        }
+void Renderer::updateRenderArea() {
+    EGLint width, height;
+    eglQuerySurface(display_, surface_, EGL_WIDTH, &width);
+    eglQuerySurface(display_, surface_, EGL_HEIGHT, &height);
+    if (width > 0 && height > 0 && (width != width_ || height != height_)) {
+        width_ = width;
+        height_ = height;
+        glViewport(0, 0, width, height);
     }
+}
 
-    void Renderer::createModels() {
-        std::vector<Vertex> vertices = {
-                Vertex(Vector3{-0.5f, -0.5f, 0}, Vector2{0, 0}),
-                Vertex(Vector3{0.5f, -0.5f, 0}, Vector2{1, 0}),
-                Vertex(Vector3{0.5f, 0.5f, 0}, Vector2{1, 1}),
-                Vertex(Vector3{-0.5f, 0.5f, 0}, Vector2{0, 1})
-        };
-        std::vector<Index> indices = {0, 1, 2, 0, 2, 3};
-        models_.emplace_back(vertices, indices, nullptr);
-    }
+void Renderer::createModels() {
+    std::vector<Vertex> vertices = {
+            Vertex(Vector3{-0.5f, -0.5f, 0}, Vector2{0, 0}),
+            Vertex(Vector3{0.5f, -0.5f, 0}, Vector2{1, 0}),
+            Vertex(Vector3{0.5f, 0.5f, 0}, Vector2{1, 1}),
+            Vertex(Vector3{-0.5f, 0.5f, 0}, Vector2{0, 1})
+    };
+    std::vector<Index> indices = {0, 1, 2, 0, 2, 3};
+    models_.emplace_back(vertices, indices, nullptr);
+}
+
