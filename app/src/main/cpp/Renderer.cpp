@@ -1654,7 +1654,57 @@ void Renderer::render() {
                     float th = tw * (timeProgressTex_.height / std::max(timeProgressTex_.width, 0.01f));
                     drawShape(0.0f, uiProjHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, timeProgressTex_.id);
                 }
+
+                // --- 新增：在左上角绘制具体的星级挑战目标 ---
+                static GameMode lastGoalMode = GameMode::ENDLESS;
+                static TextTexture goalTitleTex, goal3Tex, goal2Tex, goal1Tex;
+
+                // 仅当关卡切换时才重新生成文字贴图，避免每帧生成造成掉帧
+                if (curMode != lastGoalMode || goalTitleTex.id == 0) {
+                    lastGoalMode = curMode;
+                    if (goalTitleTex.id) glDeleteTextures(1, &goalTitleTex.id);
+                    if (goal3Tex.id) glDeleteTextures(1, &goal3Tex.id);
+                    if (goal2Tex.id) glDeleteTextures(1, &goal2Tex.id);
+                    if (goal1Tex.id) glDeleteTextures(1, &goal1Tex.id);
+
+                    int t3 = 0, t2 = 0, t1 = 0;
+                    if (curMode == GameMode::CHALLENGE_4) { t3=25; t2=28; t1=32; }
+                    else if (curMode == GameMode::CHALLENGE_5) { t3=38; t2=42; t1=48; }
+                    else if (curMode == GameMode::CHALLENGE_6) { t3=80; t2=90; t1=100; }
+                    else if (curMode == GameMode::CHALLENGE_7) { t3=120; t2=240; t1=360; }
+                    else if (curMode == GameMode::CHALLENGE_8) { t3=90; t2=150; t1=240; }
+                    else if (curMode == GameMode::CHALLENGE_9) { t3=180; t2=240; t1=360; }
+
+                    goalTitleTex = createTextTextureColoredLeft(u8"挑战目标：", 52, 0xFFFFCC00);
+                    // 使用实心文本星号 ★ (U+2605) 替换 Emoji ⭐
+                    goal3Tex = createTextTextureColoredLeft(u8"★★★: \u2264" + std::to_string(t3) + u8"秒", 52, 0xFFFFFFFF);
+                    goal2Tex = createTextTextureColoredLeft(u8"★★☆: \u2264" + std::to_string(t2) + u8"秒", 52, 0xFFDDDDDD);
+                    goal1Tex = createTextTextureColoredLeft(u8"★☆☆: \u2264" + std::to_string(t1) + u8"秒", 52, 0xFFAAAAAA);
+                }
+
+                auto drawGoalTex = [&](const TextTexture& tex, float x, float y) {
+                    if (tex.id) {
+                        // --- 修改 1：增大缩放系数，数值越大文字越大 ---
+                        float tw = tex.width * 1.2f;
+                        float th = tw * (tex.height / std::max(tex.width, 0.01f));
+                        drawShape(x + tw * 0.5f, y, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
+                    }
+                };
+
+
+
+
+                // 设置左上角的起始坐标与行间距
+                float startX = -uiHalfWidth + 1.0f;
+                float startY = uiProjHalfHeight - 2.5f;
+                float gap = 2.0f;
+
+                drawGoalTex(goalTitleTex, startX, startY);
+                drawGoalTex(goal3Tex, startX, startY - gap);
+                drawGoalTex(goal2Tex, startX, startY - gap * 2.0f);
+                drawGoalTex(goal1Tex, startX, startY - gap * 3.0f);
             }
+                // ... (保留原本的其他模式倒计时绘制逻辑) ...
             else {
                 if (game_.hasTimeLimit()) {
                     int curTime = (int)game_.getTimeRemaining();

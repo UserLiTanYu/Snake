@@ -369,25 +369,13 @@ void SnakeGame::update(float deltaTime) {
         float ey = snake_[0].y - mazeExit_.y;
 
         if (std::sqrt(ex*ex + ey*ey) < 2.5f) { // 抵达出口区域
-            score_ = static_cast<int>(mazeTimeElapsed_); // 将最终秒数暂存到 score_ 中传给UI
+            //score_ = static_cast<int>(mazeTimeElapsed_); // 将最终秒数暂存到 score_ 中传给UI
             state_ = GameState::CHALLENGE_CLEAR;
             return;
         }
     }
 
 
-    // --- 迷宮模式專屬邏輯：計時與檢測到達出口 ---
-    if (currentMode_ == GameMode::CHALLENGE_7 || currentMode_ == GameMode::CHALLENGE_8 || currentMode_ == GameMode::CHALLENGE_9) {
-        mazeTimeElapsed_ += deltaTime;
-        float ex = snake_[0].x - mazeExit_.x;
-        float ey = snake_[0].y - mazeExit_.y;
-
-        if (std::sqrt(ex*ex + ey*ey) < 2.5f) { // 抵达出口区域
-            score_ = static_cast<int>(mazeTimeElapsed_); // 将最终秒数暂存到 score_ 中传给UI
-            state_ = GameState::CHALLENGE_CLEAR;
-            return;
-        }
-    }
 
     if (magnetTimer_ > 0.0f) {
         float magnetRadius = 4.0f * scaleBase;
@@ -769,8 +757,13 @@ void SnakeGame::checkPlayerVsAI() {
 }
 
 void SnakeGame::move(float deltaTime) {
+
+    bool isFreeBoostLevel = (currentMode_ == GameMode::CHALLENGE_4 ||
+                             currentMode_ == GameMode::CHALLENGE_5 ||
+                             currentMode_ == GameMode::CHALLENGE_6);
+
     bool actuallyBoosting = false;
-    if (isBoosting_ && score_ > 0) {
+    if (isBoosting_ && (score_ > 0 || isFreeBoostLevel)) {
         actuallyBoosting = true;
     }
 
@@ -778,27 +771,29 @@ void SnakeGame::move(float deltaTime) {
 
     if (actuallyBoosting) {
         speed *= boostMultiplier_;
-        float foodPenaltyRate = 1.0f;
-        pendingFoodLoss_ += foodPenaltyRate * deltaTime;
+        if (!isFreeBoostLevel) {
+            float foodPenaltyRate = 1.0f;
+            pendingFoodLoss_ += foodPenaltyRate * deltaTime;
 
-        while (pendingFoodLoss_ >= 1.0f && score_ > 0) {
-            pendingFoodLoss_ -= 1.0f;
+            while (pendingFoodLoss_ >= 1.0f && score_ > 0) {
+                pendingFoodLoss_ -= 1.0f;
 
-            int dropValue = 1 + score_ / 30;
-            if (score_ < dropValue) dropValue = score_;
-            score_ -= dropValue;
+                int dropValue = 1 + score_ / 30;
+                if (score_ < dropValue) dropValue = score_;
+                score_ -= dropValue;
 
-            if (foods_.size() < 300 && !snake_.empty()) {
-                foods_.push_back({snake_.back(), true, equippedSkin_, dropValue});
-            }
+                if (foods_.size() < 300 && !snake_.empty()) {
+                    foods_.push_back({snake_.back(), true, equippedSkin_, dropValue});
+                }
 
-            float scaleBaseLoss = 1.0f + std::min(score_ * 0.02f, 2.0f);
-            float lengthLoss = (float)dropValue / scaleBaseLoss;
-            pendingGrowth_ -= lengthLoss;
+                float scaleBaseLoss = 1.0f + std::min(score_ * 0.02f, 2.0f);
+                float lengthLoss = (float) dropValue / scaleBaseLoss;
+                pendingGrowth_ -= lengthLoss;
 
-            while (pendingGrowth_ < 0.0f && snake_.size() > 5) {
-                snake_.pop_back();
-                pendingGrowth_ += 1.0f;
+                while (pendingGrowth_ < 0.0f && snake_.size() > 5) {
+                    snake_.pop_back();
+                    pendingGrowth_ += 1.0f;
+                }
             }
         }
     } else if (speedTimer_ > 0.0f) {
@@ -980,14 +975,31 @@ void SnakeGame::checkAIVsAITail() {
 int SnakeGame::calculateStars(GameMode mode, int score) const {
     // 竞速类关卡：分数(score)实际上是通关所用秒数，越小越好
     if (mode == GameMode::CHALLENGE_4 || mode == GameMode::CHALLENGE_5 ||
-        mode == GameMode::CHALLENGE_6 || mode == GameMode::CHALLENGE_7) {
+        mode == GameMode::CHALLENGE_6 ) {
         if (score <= 0) return 0; // 0代表还没通关过
 
         int star3 = 0, star2 = 0, star1 = 0;
-        if (mode == GameMode::CHALLENGE_4) { star3 = 25; star2 = 45; star1 = 60; }
-        else if (mode == GameMode::CHALLENGE_5) { star3 = 35; star2 = 60; star1 = 80; }
-        else if (mode == GameMode::CHALLENGE_6) { star3 = 45; star2 = 75; star1 = 90; }
-        else if (mode == GameMode::CHALLENGE_7) { star3 = 120; star2 = 240; star1 = 360; }
+        if (mode == GameMode::CHALLENGE_4) {
+            star3 = 25;
+            star2 = 28;
+            star1 = 32;
+        }
+        else if (mode == GameMode::CHALLENGE_5) {
+            star3 = 38;
+            star2 = 42;
+            star1 = 48;
+        }
+        else if (mode == GameMode::CHALLENGE_6) {
+            star3 = 80;
+            star2 = 90;
+            star1 = 100;
+        }
+        if (score <= star3) return 3;
+        if (score <= star2) return 2;
+        if (score <= star1) return 1;
+        return 0; // 超时或太久0星
+
+    }
     // --- 迷宫模式特殊计星：score 代表秒数，越小越好 ---
     if (mode == GameMode::CHALLENGE_7) {
         if (score == 0) return 0;        // <--- 核心修复：0 代表还没玩过，直接 0 星
@@ -1014,11 +1026,6 @@ int SnakeGame::calculateStars(GameMode mode, int score) const {
         return 0;                        // > 6分钟：0星
     }
 
-        if (score <= star3) return 3;
-        if (score <= star2) return 2;
-        if (score <= star1) return 1;
-        return 0; // 超时或太久0星
-    }
 
     // 吞噬类关卡：分数越大越好
     int target = 60;
@@ -1026,11 +1033,6 @@ int SnakeGame::calculateStars(GameMode mode, int score) const {
         case GameMode::CHALLENGE_1: target = 30; break;
         case GameMode::CHALLENGE_2: target = 60; break;
         case GameMode::CHALLENGE_3: target = 80; break;
-        case GameMode::CHALLENGE_8: target = 160; break;
-        case GameMode::CHALLENGE_9: target = 180; break;
-        case GameMode::CHALLENGE_4: target = 80; break;
-        case GameMode::CHALLENGE_5: target = 100; break;
-        case GameMode::CHALLENGE_6: target = 120; break;
         case GameMode::CHALLENGE_10: target = 200; break;
         default: target = 60; break;
     }
@@ -1173,7 +1175,7 @@ void SnakeGame::startChallengeLevel7() {
     for(int i = 1; i < 5; ++i) {
         snake_.push_back({startPos.x, startPos.y - i * 0.5f});
     }
-    rotation_ = M_PI / 2.0f; // 开局朝上
+    rotation_ = 0.0f; // 开局朝右
 
     foods_.clear();
     powerUps_.clear();
@@ -1274,7 +1276,7 @@ void SnakeGame::startChallengeLevel8() {
     for(int i = 1; i < 5; ++i) {
         snake_.push_back({startPos.x, startPos.y - i * 0.5f});
     }
-    rotation_ = M_PI / 2.0f; // 开局朝上
+    rotation_ = 0.0f; // 开局朝右
 
     foods_.clear();
     powerUps_.clear();
@@ -1357,7 +1359,7 @@ void SnakeGame::startChallengeLevel9() {
     for(int i = 1; i < 5; ++i) {
         snake_.push_back({startPos.x, startPos.y - i * 0.5f});
     }
-    rotation_ = M_PI / 2.0f; // 面朝上方
+    rotation_ = 0.0f; // 开局朝右
 
     foods_.clear();
     powerUps_.clear();
@@ -1424,20 +1426,21 @@ void SnakeGame::startChallengeLevel4() {
             "#.#....#........########........#....#.#",
             "#.#...#.......##........##.......#...#.#",
             "#.#...#......#............#......#...#.#",
-            "#.#...#......#............#......#...#.#",
+            "#.#...#......#.....E......#......#...#.#",
             "#.#...#......#............#......#...#.#",
             "#.#...#.......##........##.......#...#.#",
-            "#.#....#........########........#....#.#",
-            "#.#.....#......................#.....#.#",
-            "#..#.....##..................##.....#..#",
-            "#...#......##################......#...#",
-            "#....##..........................##....#",
-            "#......############..############......#",
-            "#......................................#",
-            "#.........S.............E..............#",
+            "#.#....#........#..#####........#....#.#",
+            "#.#.....#.............#........#.....#.#",
+            "#..#.....##...........#......##.....#..#",
+            "#...#......#############..###......#...#",
+            "#....##..............#...........##....#",
+            "#......############...###########......#",
+            "#..................#...................#",
+            "#.........S........#...................#",
             "########################################"
     };
     buildTrackFromMap(map);
+    rotation_ = M_PI; // 开局朝左
     state_ = GameState::PLAYING;
 }
 
@@ -1474,7 +1477,7 @@ void SnakeGame::startChallengeLevel5() {
             "#.######################################",
             "#......................................#",
             "######################################.#",
-            "#......................................E",
+            "#E......................................",
             "########################################"
     };
     buildTrackFromMap(map);
@@ -1489,17 +1492,17 @@ void SnakeGame::startChallengeLevel6() {
     endlessArenaMode_ = false; reset();
     currentMode_ = GameMode::CHALLENGE_6;
     timeRemaining_ = 290.0f; mazeTimeElapsed_ = 0.0f; isTimeOut_ = false;
-    baseSpeed_ = 25.0f; // 极高移速测试极限反应
+    baseSpeed_ = 10.0f; // 极高移速测试极限反应
     aiSnakes_.clear(); foods_.clear(); powerUps_.clear();
 
     std::vector<std::string> map = {
             "########################################",
-            "#S.#.....#.......#.......#.......#.....#",
+            "S..#.....#.......#.......#.......#.....#",
             "##.#.###.#.#####.#.#####.#.#####.#.###.#",
             "##.#.#.#.#.#...#.#.#...#.#.#...#.#.#.#.#",
             "##.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#",
             "##.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#.#",
-            "##...#...#...#...#...#...#...#...#...#.#",
+            "##...#.#...#####...#####...#####...###.#",
             "######################################.#",
             "#......................................#",
             "#.######################################",
@@ -1509,13 +1512,13 @@ void SnakeGame::startChallengeLevel6() {
             "#.#.#.##############################.#.#",
             "#.#.#.#............................#.#.#",
             "#.#.#.#.##########################.#.#.#",
-            "#.#.#.#.#........................#.#.#.#",
-            "#.#.#.#.#.######################.#.#.#.#",
-            "#.#.#.#.#........................#.#.#.#",
-            "#.#.#.#.##########################.#.#.#",
-            "#.#.#..............................#.#.#",
-            "#.#.################################.#.#",
-            "#......................................E",
+            "#.#.#.#.#.......................E#.#.#.#",
+            "#.#.#.#.#.##########################.#.#",
+            "#.#.#.#.#............................#.#",
+            "#.#.#.################################.#",
+            "#.#.#..................................#",
+            "#.#.####################################",
+            "#...##..................................",
             "########################################"
     };
     buildTrackFromMap(map);
