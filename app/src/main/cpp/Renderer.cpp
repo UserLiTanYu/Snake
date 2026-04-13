@@ -1395,37 +1395,28 @@ void Renderer::render() {
             float px = startX + col * spacingX;
             float py = startY - row * spacingY;
 
-            if (i < 3) {
-                // 已开发的关卡 (亮色)
-                float r=0.2f, g=0.8f, b=0.4f;
-                if(i==1){ r=0.8f; g=0.6f; b=0.1f; }
-                else if(i==2){ r=0.9f; g=0.2f; b=0.2f; }
+            float r=0.2f, g=0.8f, b=0.4f;
+            if(i%3==1){ r=0.8f; g=0.6f; b=0.1f; }
+            else if(i%3==2){ r=0.9f; g=0.2f; b=0.2f; }
 
-                drawShape(px, py, boxW, boxW, r, g, b, 1.0f, true); // 圆形底座
+            drawShape(px, py, boxW, boxW, r, g, b, 1.0f, true); // 圆形底座
 
-                // 【修改3】修复字体“瘦高”，按其原始长宽比缩放
-                std::string lvlKey = "level_" + std::to_string(i + 1);
-                if (textTextures_.count(lvlKey)) {
-                    auto& tex = textTextures_[lvlKey];
-                    float tw = boxW * 0.75f;
-                    float th = tw * (tex.height / std::max(tex.width, 0.01f));
-                    drawShape(px, py + 1.0f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
+            std::string lvlKey = "level_" + std::to_string(i + 1);
+            if (textTextures_.count(lvlKey)) {
+                auto& tex = textTextures_[lvlKey];
+                float tw = boxW * 0.75f;
+                float th = tw * (tex.height / std::max(tex.width, 0.01f));
+                drawShape(px, py + 1.0f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex.id);
+            }
+
+            int stars = game_.getChallengeStars(static_cast<GameMode>(static_cast<int>(GameMode::CHALLENGE_1) + i));
+            for (int s = 0; s < 3; s++) {
+                float sx = px + (s - 1) * 2.2f;
+                if (s < stars) {
+                    drawShape(sx, py - 2.2f, 2.0f, 2.0f, 1.0f, 0.9f, 0.1f, 1.0f, false, 0.0f, 0, false, false, 0.0f, true);
+                } else {
+                    drawShape(sx, py - 2.2f, 2.0f, 2.0f, 0.3f, 0.3f, 0.3f, 1.0f, false, 0.0f, 0, false, false, 0.0f, true);
                 }
-
-                // 绘制当前关卡的星星
-                int stars = game_.getChallengeStars(static_cast<GameMode>(static_cast<int>(GameMode::CHALLENGE_1) + i));
-                for (int s = 0; s < 3; s++) {
-                    float sx = px + (s - 1) * 2.2f;
-                    if (s < stars) {
-                        drawShape(sx, py - 2.2f, 2.0f, 2.0f, 1.0f, 0.9f, 0.1f, 1.0f, false, 0.0f, 0, false, false, 0.0f, true);
-                    } else {
-                        drawShape(sx, py - 2.2f, 2.0f, 2.0f, 0.3f, 0.3f, 0.3f, 1.0f, false, 0.0f, 0, false, false, 0.0f, true);
-                    }
-                }
-            } else {
-                // 敬请期待的关卡 (置灰锁定状态)
-                drawShape(px, py, boxW, boxW, 0.2f, 0.2f, 0.2f, 0.6f, true);
-                drawShape(px, py, boxW*0.3f, boxW*0.3f, 0.1f, 0.1f, 0.1f, 1.0f, false, 0.0f, 0, true); // 画个齿轮假装是锁
             }
         }
     }
@@ -1615,6 +1606,24 @@ void Renderer::render() {
         }
         // ==== 绘制局内挑战目标进度 ====
         if (currentState == GameState::PLAYING && !game_.isEndlessArenaMode()) {
+            if (game_.hasTimeLimit()) {
+                static int lastTimeVal = -1;
+                int curTime = (int)game_.getTimeRemaining();
+                if (curTime != lastTimeVal || timeProgressTex_.id == 0) {
+                    lastTimeVal = curTime;
+                    if (timeProgressTex_.id) glDeleteTextures(1, &timeProgressTex_.id);
+                    std::string timeStr = u8"倒计时: " + std::to_string(curTime) + "s";
+                    // 红色警示颜色当时间小于10秒
+                    int color = curTime <= 10 ? 0xFFFF4444 : 0xFFFFAA00;
+                    timeProgressTex_ = createTextTextureColoredLeft(timeStr, 64, color);
+                }
+                if (timeProgressTex_.id) {
+                    float tw = std::min(12.0f, timeProgressTex_.width);
+                    float th = tw * (timeProgressTex_.height / std::max(timeProgressTex_.width, 0.01f));
+                    float drawX = worldHalfWidth - tw * 0.5f - 1.0f;
+                    drawShape(drawX, kProjectionHalfHeight - 2.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, timeProgressTex_.id);
+                }
+            }
             static int lastProgScore = -1;
             int curScore = game_.getScore();
             int target = game_.getChallengeTarget();
@@ -2032,18 +2041,23 @@ void Renderer::handleInput() {
                 float startY = -1.0f;
                 float spacingY = 13.0f;
 
-                for (int i = 0; i < 3; ++i) { // 目前只有 3 关可点
+                for (int i = 0; i < 10; ++i) {
                     int row = i / 5;
                     int col = i % 5;
                     float px = startX + col * spacingX;
                     float py = startY - row * spacingY;
-
-                    // 圆形点击判定
                     if (std::sqrt((nx - px)*(nx - px) + (ny - py)*(ny - py)) < 4.5f) {
                         playSfx(2);
                         if (i == 0) game_.startChallengeLevel1();
                         else if (i == 1) game_.startChallengeLevel2();
                         else if (i == 2) game_.startChallengeLevel3();
+                        else if (i == 3) game_.startChallengeLevel4();
+                        else if (i == 4) game_.startChallengeLevel5();
+                        else if (i == 5) game_.startChallengeLevel6();
+                        else if (i == 6) game_.startChallengeLevel7();
+                        else if (i == 7) game_.startChallengeLevel8();
+                        else if (i == 8) game_.startChallengeLevel9();
+                        else if (i == 9) game_.startChallengeLevel10();
                     }
                 }
             }
@@ -2247,24 +2261,22 @@ void Renderer::triggerGameOver() {
     // 判断当前是否是挑战模式 (你可以根据你实际的枚举或判断函数来写)
     // 这里假设你有 getCurrentMode()，且模式不是 ENDLESS
     if (!game_.isEndlessArenaMode()) {
-        // 【挑战模式失败】: 玩家撞墙死了
-        int stars = game_.calculateStars(game_.getCurrentMode(), score);
-
-        // ==========================================
-        // ★ 新增：在这里也要检查并保存历史最高分！★
-        // 这样即使玩家只拿到了 1 星或 2 星就死了，只要破了记录也能存下来！
         int savedMax = game_.getMaxScore(game_.getCurrentMode());
         if (score > savedMax) {
             game_.setMaxScore(game_.getCurrentMode(), score);
-            // 调用 JNI 保存分数到本地
             jmethodID saveMethod = env->GetMethodID(clazz, "saveChallengeScore", "(II)V");
             if (saveMethod) env->CallVoidMethod(activityObj, saveMethod, (jint)game_.getCurrentMode(), (jint)score);
         }
-        // ==========================================
 
-        // 弹出失败(显示星星)的弹窗
-        jmethodID method = env->GetMethodID(clazz, "showChallengeFailDialog", "(II)V");
-        if (method) env->CallVoidMethod(activityObj, method, (jint) stars, (jint) score);
+        // 新增：区分超时失败和撞击失败
+        if (game_.isTimeOut()) {
+            jmethodID method = env->GetMethodID(clazz, "showTimeOutDialog", "(I)V");
+            if (method) env->CallVoidMethod(activityObj, method, (jint)score);
+        } else {
+            int stars = game_.calculateStars(game_.getCurrentMode(), score);
+            jmethodID method = env->GetMethodID(clazz, "showChallengeFailDialog", "(II)V");
+            if (method) env->CallVoidMethod(activityObj, method, (jint) stars, (jint) score);
+        }
     }
     else {
         // 【无尽模式失败】: 原本的逻辑
@@ -2295,7 +2307,13 @@ void Renderer::restartGame() {
         game_.startChallengeLevel2();
     } else if (game_.getCurrentMode() == GameMode::CHALLENGE_3) {
         game_.startChallengeLevel3();
-    } else {
+    }else if (game_.getCurrentMode() == GameMode::CHALLENGE_4) game_.startChallengeLevel4();
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_5) game_.startChallengeLevel5();
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_6) game_.startChallengeLevel6();
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_7) game_.startChallengeLevel7();
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_8) game_.startChallengeLevel8();
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_9) game_.startChallengeLevel9();
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_10) game_.startChallengeLevel10(); else {
         game_.setEndlessArenaMode(endlessArenaActive_);
         game_.reset();
         game_.startGame();

@@ -904,32 +904,6 @@ void SnakeGame::checkAIVsAITail() {
 }
 
 
-void SnakeGame::setMaxScore(GameMode mode, int score) {
-    if (mode == GameMode::CHALLENGE_1) maxScoreCh1_ = score;
-    else if (mode == GameMode::CHALLENGE_2) maxScoreCh2_ = score;
-    else if (mode == GameMode::CHALLENGE_3) maxScoreCh3_ = score;
-    else if (mode == GameMode::CHALLENGE_4) maxScoreCh4_ = score;
-    else if (mode == GameMode::CHALLENGE_5) maxScoreCh5_ = score;
-    else if (mode == GameMode::CHALLENGE_6) maxScoreCh6_ = score;
-    else if (mode == GameMode::CHALLENGE_7) maxScoreCh7_ = score;
-    else if (mode == GameMode::CHALLENGE_8) maxScoreCh8_ = score;
-    else if (mode == GameMode::CHALLENGE_9) maxScoreCh9_ = score;
-    else if (mode == GameMode::CHALLENGE_10) maxScoreCh10_ = score;
-}
-
-int SnakeGame::getMaxScore(GameMode mode) const {
-    if (mode == GameMode::CHALLENGE_1) return maxScoreCh1_;
-    else if (mode == GameMode::CHALLENGE_2) return maxScoreCh2_;
-    else if (mode == GameMode::CHALLENGE_3) return maxScoreCh3_;
-    else if (mode == GameMode::CHALLENGE_4) return maxScoreCh4_;
-    else if (mode == GameMode::CHALLENGE_5) return maxScoreCh5_;
-    else if (mode == GameMode::CHALLENGE_6) return maxScoreCh6_;
-    else if (mode == GameMode::CHALLENGE_7) return maxScoreCh7_;
-    else if (mode == GameMode::CHALLENGE_8) return maxScoreCh8_;
-    else if (mode == GameMode::CHALLENGE_9) return maxScoreCh9_;
-    else if (mode == GameMode::CHALLENGE_10) return maxScoreCh10_;
-    return 0;
-}
 
 int SnakeGame::calculateStars(GameMode mode, int score) const {
     if (isTimeOut_) return 0; // 超时直接 0 星

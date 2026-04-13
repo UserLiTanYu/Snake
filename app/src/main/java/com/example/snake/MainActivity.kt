@@ -338,6 +338,18 @@ class MainActivity : GameActivity() {
         )
     }
     @Keep
+    fun showTimeOutDialog(score: Int) {
+        showCuteDialog(
+            title = "时间到了！", // ⏰
+            message = "哎呀，动作有点慢哦！\n\n当前长度: $score\n\n差一点点就通关了，再抓紧点时间吧！",
+            posText = "重新挑战",
+            negText = "返回主界面",
+            onPos = { nativeRestartGame() },
+            onNeg = { nativeGoToMainMenu() }
+        )
+    }
+
+    @Keep
     fun showChallengeFailDialog(stars: Int, score: Int) {
         // 根据获得的星星数生成图标，比如 1星就是 ⭐☆☆
         val starStr = "⭐".repeat(stars) + "☆".repeat(3 - stars)
