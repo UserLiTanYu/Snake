@@ -99,7 +99,9 @@ public:
 
     // --- 核心修改：让挑战模式所有关卡都开启倒计时功能 ---
     // --- 核心修改：让挑战模式有倒计时，但排除第七关(迷宫模式) ---
-    bool hasTimeLimit() const { return currentMode_ >= GameMode::CHALLENGE_1 && currentMode_ != GameMode::CHALLENGE_7; }
+    // --- 核心修改：将第九关也排除在倒计时之外 ---
+    bool hasTimeLimit()
+    const { return currentMode_ >= GameMode::CHALLENGE_1 && currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_8 && currentMode_ != GameMode::CHALLENGE_9; }
     float getTimeRemaining() const { return timeRemaining_; }
     bool isTimeOut() const { return isTimeOut_; }
     void update(float deltaTime);

@@ -1288,10 +1288,10 @@ void Renderer::render() {
     float uiProjHalfHeight = kProjectionHalfHeight; // 固定的 22.0f
     float worldProjHalfHeight = uiProjHalfHeight;
 
-    // 如果是迷宮模式(第七關)，將主世界視角拉近一倍！
-    if (game_.getCurrentMode() == GameMode::CHALLENGE_7 &&
+    // 如果是迷宮模式(第七關或第八關)，將主世界視角拉近一倍！
+    if ((game_.getCurrentMode() == GameMode::CHALLENGE_7 || game_.getCurrentMode() == GameMode::CHALLENGE_8 || game_.getCurrentMode() == GameMode::CHALLENGE_9) &&
         (currentState == GameState::PLAYING || currentState == GameState::GAME_OVER || currentState == GameState::CHALLENGE_CLEAR || currentState == GameState::PAUSED)) {
-        worldProjHalfHeight = 11.0f; // 視角變小，鏡頭放大
+        worldProjHalfHeight = 11.0f;
     }
 
     float uiHalfWidth = uiProjHalfHeight * aspect;
@@ -1329,7 +1329,7 @@ void Renderer::render() {
         jclass clazz = env->GetObjectClass(activityObj);
 
         // --- 核心修復：根據模式分開處理結算邏輯 ---
-        if (game_.getCurrentMode() == GameMode::CHALLENGE_7) {
+        if (game_.getCurrentMode() == GameMode::CHALLENGE_7 || game_.getCurrentMode() == GameMode::CHALLENGE_8 || game_.getCurrentMode() == GameMode::CHALLENGE_9) {
             // 迷宮模式：直接讀取真實耗時，越短越好
             int mazeTime = (int)game_.getMazeTimeElapsed();
             if (savedMax == 0 || mazeTime < savedMax) {
@@ -1527,7 +1527,7 @@ void Renderer::render() {
             drawShape(wall.x - camX, wall.y - camY, 2.0f, 2.0f, 0.4f, 0.4f, 0.4f, 1.0f);
         }
 
-        if (game_.getCurrentMode() == GameMode::CHALLENGE_7) {
+        if (game_.getCurrentMode() == GameMode::CHALLENGE_7 || game_.getCurrentMode() == GameMode::CHALLENGE_8 || game_.getCurrentMode() == GameMode::CHALLENGE_9) {
             Vector2f exitPos = game_.getMazeExit();
             static float portalRot = 0.0f;
             portalRot += deltaTime * 1.5f;
@@ -1630,7 +1630,7 @@ void Renderer::render() {
             static int lastTimeVal = -1;
             static GameMode lastTimeMode = GameMode::ENDLESS;
 
-            if (curMode == GameMode::CHALLENGE_7) {
+            if (curMode == GameMode::CHALLENGE_7 || curMode == GameMode::CHALLENGE_8 || curMode == GameMode::CHALLENGE_9) {
                 int curTime = (int)game_.getMazeTimeElapsed();
                 if (curTime != lastTimeVal || curMode != lastTimeMode || timeProgressTex_.id == 0) {
                     lastTimeVal = curTime;
