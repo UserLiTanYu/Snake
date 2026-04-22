@@ -41,6 +41,12 @@ public:
 private:
     TextTexture timeProgressTex_;
     TextTexture challengeProgressTex_;
+    // --- [新增代码：Boss 分数 UI 变量] ---
+    int bossHighScore_ = 0;
+    int lastBossScore_ = -1;
+    TextTexture bossScoreTex_{0, 0, 0};
+    TextTexture bossHighScoreTex_{0, 0, 0};
+    // --- [新增结束] ---
     void initRenderer();
     void updateRenderArea();
     void createModels();
@@ -164,6 +170,12 @@ private:
     GLuint skinTex_[20];
 
     static constexpr float kProjectionHalfHeight = 22.f;
+
+    // 【新增】：Boss 战专用绘制函数
+    void drawBoss(float camX, float camY);
+    void drawBossUI();
+    void drawPlayerBuffAura(float camX, float camY); // 绘制玩家当前的颜色 Buff 光效
+    void drawBossHowToPlay(); // [确保这一行在这里]
 };
 
 extern Renderer* gRenderer;

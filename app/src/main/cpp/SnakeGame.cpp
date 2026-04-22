@@ -67,6 +67,12 @@ SnakeGame::SnakeGame(float worldWidth, float worldHeight)
 }
 
 void SnakeGame::reset() {
+    plasmaTimer_ = 0.0f;
+    boss_.hitCount = 0;
+    boss_.speedBoost = 0.0f;
+    boss_.active = false;
+    playerBuffColor_ = -1;
+    buffTimer_ = 0.0f;
     snake_.clear();
     pathHistory_.clear();
     aiSnakes_.clear();
@@ -334,7 +340,7 @@ std::vector<RankPanelRow> SnakeGame::getRankPanelRows() const {
 }
 
 void SnakeGame::update(float deltaTime) {
-    if (state_ != GameState::PLAYING) return;
+    if (state_ != GameState::PLAYING && state_ != GameState::BOSS_BATTLE) return;
     if (hasTimeLimit()) {
         timeRemaining_ -= deltaTime;
         if (timeRemaining_ <= 0.0f) {
@@ -347,6 +353,9 @@ void SnakeGame::update(float deltaTime) {
     if (speedTimer_ > 0.0f) speedTimer_ = std::max(0.0f, speedTimer_ - deltaTime);
     if (shieldTimer_ > 0.0f) shieldTimer_ = std::max(0.0f, shieldTimer_ - deltaTime);
     if (magnetTimer_ > 0.0f) magnetTimer_ = std::max(0.0f, magnetTimer_ - deltaTime);
+    // --- [核心修改点 1：在这里加上等离子计时器的递减] ---
+    if (plasmaTimer_ > 0.0f) plasmaTimer_ = std::max(0.0f, plasmaTimer_ - deltaTime);
+    // --- [修改结束] ---
 
     move(deltaTime);
     if (state_ == GameState::GAME_OVER) return;
@@ -406,6 +415,12 @@ void SnakeGame::update(float deltaTime) {
         if (std::sqrt(dx * dx + dy * dy) < eatRadius + currentFoodRadius) {
             score_ += it->value;
 
+            // 【新增内容】：如果是在 Boss 战模式，吃食物会获得颜色 Buff
+            if (currentMode_ == GameMode::BOSS_RAID) {
+                playerBuffColor_ = it->colorType; // 记录食物颜色
+                buffTimer_ = 10.0f;              // Buff 持续 10 秒
+            }
+
 
             float growthAmount = (float)it->value / scaleBase;
             pendingGrowth_ += growthAmount;
@@ -432,6 +447,9 @@ void SnakeGame::update(float deltaTime) {
             if (puIt->type == PowerUpType::SPEED) speedTimer_ = 3.0f;
             else if (puIt->type == PowerUpType::SHIELD) shieldTimer_ = 5.0f;
             else if (puIt->type == PowerUpType::MAGNET) magnetTimer_ = 3.0f;
+                // --- [核心修改点 2：在这里加上等离子道具的判定] ---
+            else if (puIt->type == PowerUpType::PLASMA) plasmaTimer_ = 3.0f; // 获得 3 秒斩击状态！
+            // --- [修改结束] ---
             puIt = powerUps_.erase(puIt);
         } else {
             ++puIt;
@@ -465,6 +483,19 @@ void SnakeGame::update(float deltaTime) {
             while (powerUps_.size() < 3) spawnPowerUp();
             if (powerUps_.size() < 5 && std::uniform_real_distribution<float>(0, 1)(rng_) < 0.01f) {
                 spawnPowerUp();
+            }
+        }
+    }
+    // --- Boss 驱动与判定逻辑 ---
+    if (currentMode_ == GameMode::BOSS_RAID && boss_.active) {
+        updateBoss(deltaTime);        // 让 Boss 思考并移动
+        checkPlayerVsBoss();          // 检测 Boss 与玩家的碰撞
+
+        // 更新玩家 Buff 计时器
+        if (buffTimer_ > 0.0f) {
+            buffTimer_ -= deltaTime;
+            if (buffTimer_ <= 0.0f) {
+                playerBuffColor_ = -1; // Buff 到期，颜色重置
             }
         }
     }
@@ -1528,3 +1559,269 @@ void SnakeGame::startChallengeLevel6() {
 //BUILD_CHALLENGE_LEVEL(startChallengeLevel8, GameMode::CHALLENGE_8, 160, 80.0f)
 //BUILD_CHALLENGE_LEVEL(startChallengeLevel9, GameMode::CHALLENGE_9, 180, 70.0f)
 BUILD_CHALLENGE_LEVEL(startChallengeLevel10, GameMode::CHALLENGE_10, 200, 60.0f) // 极致挑战
+
+
+void SnakeGame::startBossLevel() {
+    plasmaTimer_ = 0.0f;
+    boss_.hitCount = 0;
+    boss_.speedBoost = 0.0f;
+
+    endlessArenaMode_ = false; // 使用 SnakeGame 类中定义的变量名
+    reset(); // 清理当前关卡数据
+    currentMode_ = GameMode::BOSS_RAID;
+    state_ = GameState::BOSS_HOW_TO_PLAY;
+
+    // --- 【新增】：设置 3 分钟倒计时 ---
+    timeRemaining_ = 180.0f;
+    isTimeOut_ = false;
+
+    // 初始化 Boss 基础属性
+    boss_.active = true;
+    boss_.totalHP = 500.0f;
+    boss_.maxHP = 500.0f;
+    boss_.phase = 1;
+
+    // --- [新增修改点]：重置闪烁计时器和技能计时器 ---
+    boss_.hitFlashTimer = 0.0f;
+    boss_.skillTimer = 0.0f;
+    // --- [修改结束] ---
+
+    boss_.rotation = 0.0f;
+    boss_.segments.clear();
+
+    // 构建 Boss 身体：1个头 + 4个装甲 + 1个核心 + 4个装甲 + 1个核心 + 1个尾巴
+    // 这种结构体现了“策略性”，玩家需要穿过装甲打核心
+    Vector2f startPos = {worldWidth_ * 0.2f, worldHeight_ * 0.5f};
+
+    // 添加头部
+    boss_.segments.push_back({startPos, BossSegmentType::HEAD, 0, -1});
+
+    // 循环添加身体段 (总长约 12-15 段)
+    for (int i = 0; i < 15; ++i) {
+        BossSegmentType sType = BossSegmentType::ARMOR;
+        int color = -1;
+
+        // 每隔 5 段放一个核心弱点，并分配颜色
+        if (i == 5) { sType = BossSegmentType::CORE; color = 0; } // 红色核心
+        if (i == 11) { sType = BossSegmentType::CORE; color = 1; } // 绿色核心
+
+        boss_.segments.push_back({{startPos.x - (i + 1) * 2.0f, startPos.y}, sType, 100.0f, color});
+    }
+
+    // 随机生成一些颜色食物，供玩家获取 Buff
+    foods_.clear();
+    // --- 修改点：在 Boss 模式中直接手动生成特定颜色的食物 ---
+    for(int i = 0; i < 30; ++i) {
+        std::uniform_real_distribution<float> distX(1.0f, worldWidth_ - 1.0f);
+        std::uniform_real_distribution<float> distY(1.0f, worldHeight_ - 1.0f);
+        // 只生成 0, 1, 2 (红、绿、蓝)
+        int bossColor = i % 3;
+        foods_.push_back({{distX(rng_), distY(rng_)}, false, bossColor, 1});
+    }
+}
+
+void SnakeGame::updateBoss(float deltaTime) {
+    if (!boss_.active || state_ != GameState::BOSS_BATTLE) return;
+
+    // --- [新增修改点]：处理闪烁计时器递减 ---
+    if (boss_.hitFlashTimer > 0.0f) {
+        boss_.hitFlashTimer -= deltaTime;
+        if (boss_.hitFlashTimer < 0.0f) boss_.hitFlashTimer = 0.0f;
+    }
+    // --- [修改结束] ---
+
+    Vector2f playerHead = snake_.front();
+    Vector2f bossHead = boss_.segments[0].pos;
+    float distToPlayer = std::sqrt(std::pow(playerHead.x - bossHead.x, 2) + std::pow(playerHead.y - bossHead.y, 2));
+
+    // --- 1. AI 决策逻辑 (Steering) ---
+    float desiredRotation = boss_.rotation;
+    float turnSpeed = 1.5f; // 基础转向速度，Boss 转弯较慢
+
+    if (boss_.phase == 1) { // 阶段1：巡航，缓慢靠近玩家
+        desiredRotation = std::atan2(playerHead.y - bossHead.y, playerHead.x - bossHead.x);
+    }
+    else if (boss_.phase == 2) { // 阶段2：试图围困玩家 (Encircle)
+        // 目标点设在玩家前方，形成截击
+        Vector2f interceptPoint = playerHead + Vector2f{std::cos(rotation_), std::sin(rotation_)} * 10.0f;
+        desiredRotation = std::atan2(interceptPoint.y - bossHead.y, interceptPoint.x - bossHead.x);
+        turnSpeed = 2.5f;
+    }
+    // --- 修改这里：确保先声明 moveSpeed ---
+    float moveSpeed = 12.0f; // 给一个基础默认值
+
+    // 在 updateBoss 函数内部的阶段处理部分修改/添加：
+    if (boss_.phase == 3) {
+        moveSpeed = 18.0f; // 狂暴速度
+        boss_.skillTimer += deltaTime;
+
+        if (boss_.skillTimer > 4.0f) { // 每 4 秒释放一次冲击波
+            Vector2f playerHead = snake_.front();
+            Vector2f bossHead = boss_.segments[0].pos;
+
+            float dx = playerHead.x - bossHead.x;
+            float dy = playerHead.y - bossHead.y;
+            float dist = std::sqrt(dx*dx + dy*dy);
+
+            // 如果玩家靠得太近，会被强力弹开
+            if (dist < 15.0f && dist > 0.001f) {
+                // 这是一个物理推力：直接修改玩家的坐标或给予一个瞬时位移
+                // Vibe: 玩家被震退的感觉
+                float pushPower = 8.0f;
+                snake_[0].x += (dx / dist) * pushPower;
+                snake_[0].y += (dy / dist) * pushPower;
+
+                // 重置技能计时器
+                boss_.skillTimer = 0.0f;
+                // 可以在这里触发一个屏幕震动的标记（后续由 Renderer 处理）
+            }
+        }
+    }
+
+    // 平滑转向 (Vibe: 巨大的怪物转弯有延迟感)
+    boss_.rotation = lerpAngle(boss_.rotation, desiredRotation, turnSpeed * deltaTime);
+
+    // --- 2. 移动 Boss 头部 ---
+    moveSpeed = (boss_.phase == 3) ? 18.0f : 12.0f;
+    // --- [核心修改点 3：加上被斩击后的永久加速补偿] ---
+    moveSpeed += boss_.speedBoost;
+    // --- [修改结束] ---
+    Vector2f dir = {std::cos(boss_.rotation), std::sin(boss_.rotation)};
+    boss_.segments[0].pos = boss_.segments[0].pos + dir * moveSpeed * deltaTime;
+
+    // --- 3. 身体跟随逻辑 (IK) ---
+    // Boss 的段距比小蛇大 (Vibe: 关节感)
+    float bossSegmentDist = 2.5f;
+    for (size_t i = 1; i < boss_.segments.size(); ++i) {
+        Vector2f& cur = boss_.segments[i].pos;
+        Vector2f& prev = boss_.segments[i-1].pos;
+        float dx = cur.x - prev.x;
+        float dy = cur.y - prev.y;
+        float d = std::sqrt(dx*dx + dy*dy);
+        if (d > bossSegmentDist) {
+            float ratio = bossSegmentDist / d;
+            cur.x = prev.x + dx * ratio;
+            cur.y = prev.y + dy * ratio;
+        }
+    }
+
+    // --- 4. 阶段转换检查 ---
+    float hpPercent = boss_.totalHP / boss_.maxHP;
+    if (hpPercent < 0.2f) boss_.phase = 3;
+    else if (hpPercent < 0.6f) boss_.phase = 2;
+}
+
+void SnakeGame::checkPlayerVsBoss() {
+    if (!boss_.active || shieldTimer_ > 0.0f) return;
+
+    Vector2f pHead = snake_.front();
+    float pRad = 0.5f * (1.0f + std::min(score_ * 0.02f, 2.0f));
+
+    // 【重要】：必须使用索引循环 (size_t i)，因为断尾需要确切知道从第几节开始切
+    for (size_t i = 0; i < boss_.segments.size(); ++i) {
+        auto& seg = boss_.segments[i];
+        float dx = pHead.x - seg.pos.x;
+        float dy = pHead.y - seg.pos.y;
+        float dist = std::sqrt(dx*dx + dy*dy);
+
+        float bossRad = (seg.type == BossSegmentType::HEAD) ? 2.5f : 1.8f;
+
+        if (dist < (pRad + bossRad)) {
+            if (seg.type == BossSegmentType::CORE) {
+                // 只有颜色匹配才能造成伤害 (Vibe: 策略博弈)
+                if (playerBuffColor_ == seg.colorType) {
+                    boss_.totalHP -= 50.0f; // 保留你的 50 点高伤害！
+                    boss_.hitFlashTimer = 0.15f; // 触发 0.15 秒的闪烁
+
+                    // 触发一些反馈（比如玩家反弹，防止连续判定）
+                    pendingGrowth_ += 2.0f;
+
+                    // --- [新增机制：打2下掉落等离子斩击道具] ---
+                    boss_.hitCount++;
+                    if (boss_.hitCount >= 2) {
+                        boss_.hitCount = 0; // 重置计数
+                        // 在 Boss 尾巴的位置掉落等离子炸弹
+                        Vector2f tailPos = boss_.segments.back().pos;
+                        powerUps_.push_back({tailPos, PowerUpType::PLASMA});
+                    }
+
+                    // 1. 给予 0.5 秒的无敌时间，防止连续碰撞
+                    shieldTimer_ = 0.5f;
+                    // 3. 物理回弹：将蛇头坐标往回拨一点，避免卡在 Boss 身体里
+                    Vector2f pushBack = {std::cos(rotation_ + (float)M_PI), std::sin(rotation_ + (float)M_PI)};
+                    snake_[0] = snake_[0] + pushBack * 3.0f;
+                    // 4. 关键：击中弱点后立即结束本帧判定，不再检查其他段位
+                    return;
+                } else {
+                    // 颜色不匹配，玩家受轻微惩罚或被弹开
+                    score_ = std::max(0, score_ - 1);
+                }
+            } else {
+                // 👇👇👇 从这里开始往下，全部替换成你发我的新代码 👇👇👇
+
+                // --- [高阶玩法：等离子斩击！] ---
+                if (plasmaTimer_ > 0.0f && seg.type == BossSegmentType::ARMOR) {
+
+                    int severedCount = boss_.segments.size() - i; // 计算切掉了多少节
+                    bool coreDestroyed = false; // 记录是否切到了核心
+
+                    // 1. 生成食物，并检查是否切碎了核心
+                    for (size_t j = i; j < boss_.segments.size(); ++j) {
+                        if (boss_.segments[j].type == BossSegmentType::CORE) {
+                            coreDestroyed = true;
+                        }
+                        foods_.push_back({boss_.segments[j].pos, true, 0, 8});
+                    }
+
+                    // 2. 截断身体
+                    boss_.segments.erase(boss_.segments.begin() + i, boss_.segments.end());
+
+                    // --- [修复 Bug：把截断转化为真实伤害！] ---
+                    // 每切掉一节装甲扣 10 点血
+                    boss_.totalHP -= severedCount * 10.0f;
+
+                    // 如果这一刀顺带把核心也给切碎了，直接追加 200 点真实伤害！
+                    if (coreDestroyed) {
+                        boss_.totalHP -= 200.0f;
+                    }
+
+                    // 防软卡死保险：检查剩余的身体里还有没有核心
+                    bool hasCore = false;
+                    for (auto& remainingSeg : boss_.segments) {
+                        if (remainingSeg.type == BossSegmentType::CORE) {
+                            hasCore = true;
+                            break;
+                        }
+                    }
+                    // 如果一个核心都没了，Boss 失去动力源，直接即死！
+                    if (!hasCore) {
+                        boss_.totalHP = 0.0f;
+                    }
+                    // --- [修复结束] ---
+
+                    // 3. 动态难度调整
+                    boss_.speedBoost += 1.5f;
+                    boss_.hitFlashTimer = 0.5f;
+                    shieldTimer_ = 1.0f;
+
+                    // 4. 打击感回弹
+                    Vector2f pushBack = {std::cos(rotation_ + (float)M_PI), std::sin(rotation_ + (float)M_PI)};
+                    snake_[0] = snake_[0] + pushBack * 5.0f;
+                    return;
+                }
+                    // 如果没有斩击 Buff，撞上去依然是死路一条
+                else {
+                    state_ = GameState::GAME_OVER;
+                    return;
+                }
+
+                // 👆👆👆 替换到这里结束 👆👆👆
+            }
+        }
+    }
+
+    if (boss_.totalHP <= 0) {
+        state_ = GameState::CHALLENGE_CLEAR;
+        boss_.active = false;
+    }
+}

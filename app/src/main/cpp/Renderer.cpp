@@ -186,6 +186,9 @@ Renderer::Renderer(android_app *pApp) :
     for(int m = (int)GameMode::CHALLENGE_4; m <= (int)GameMode::CHALLENGE_10; ++m) {
         game_.setMaxScore((GameMode)m, loadChallengeScore(m));
     }
+    // --- [新增代码：加载 Boss 模式历史最高分] ---
+    bossHighScore_ = loadChallengeScore((int)GameMode::BOSS_RAID);
+    // --- [新增结束] ---
     lastFrameTime_ = std::chrono::steady_clock::now();
 }
 
@@ -633,7 +636,7 @@ void Renderer::loadTextTextures() {
     textTextures_["start"] = createTextTexture("开始游戏", 50);
     textTextures_["endless"] = createTextTexture("无尽模式", 40);
     textTextures_["challenge"] = createTextTexture("挑战模式", 40);
-    textTextures_["more"] = createTextTexture("更多玩法", 40);
+    textTextures_["more"] = createTextTexture("BOSS模式", 40);
     textTextures_["music_on"] = createTextTexture("音乐: 开", 40);
     textTextures_["music_off"] = createTextTexture("音乐: 关", 40);
     textTextures_["sfx_on"] = createTextTexture("音效: 开", 40);
@@ -645,7 +648,7 @@ void Renderer::loadTextTextures() {
     textTextures_["start"] = createTextTexture("开始游戏", 200);
     textTextures_["endless"] = createTextTexture("无尽模式", 160);
     textTextures_["challenge"] = createTextTexture("挑战模式", 160);
-    textTextures_["more"] = createTextTexture("更多玩法", 160);
+    textTextures_["more"] = createTextTexture("BOSS模式", 160);
     textTextures_["music_on"] = createTextTexture("音乐: 开", 160);
     textTextures_["music_off"] = createTextTexture("音乐: 关", 160);
     textTextures_["sfx_on"] = createTextTexture("音效: 开", 160);
@@ -703,6 +706,16 @@ void Renderer::loadTextTextures() {
     textTextures_["edit_name"] = createTextTexture("修改昵称", 160);
     textTextures_["head_names_on"] = createTextTexture("显示名字: 开", 160);
     textTextures_["head_names_off"] = createTextTexture("显示名字: 关", 160);
+
+    // --- [新增规则文字贴图] ---
+    textTextures_["boss_rule_title"] = createTextTexture("虚空狩猎：霓虹之影", 60);
+    textTextures_["boss_rule_1"] = createTextTexture("1. 吃🔴🟢🔵食物，获得同色光环", 45);
+    textTextures_["boss_rule_2"] = createTextTexture("2. 光环颜色与Boss可攻击段匹配时，加速冲撞可造成伤害", 45);
+    textTextures_["boss_rule_3"] = createTextTexture("3. 避开Boss头部和灰色装甲，否则会失败", 45);
+    textTextures_["boss_rule_4"] = createTextTexture("4. Boss随血量降低会逐渐变得疯狂", 45);
+    textTextures_["boss_rule_5"] = createTextTexture("5. 清空Boss血量即获得胜利", 45);
+    textTextures_["boss_rule_6"] = createTextTexture("6. 有机会获得神秘限时闪电道具可斩断甚至击杀Boss", 45);
+    textTextures_["boss_btn_ok"] = createTextTexture("已明白 (开始)", 50);
 }
 
 namespace {
@@ -1348,17 +1361,32 @@ void Renderer::render() {
             jmethodID method = env->GetMethodID(clazz, "showMazeClearDialog", "(II)V");
             if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)mazeTime);
 
-        }else {
-            // 其他模式：讀取分數，越高越好
-            if (curScore > savedMax) {
-                game_.setMaxScore(game_.getCurrentMode(), curScore);
-                saveChallengeScore((int)game_.getCurrentMode(), curScore);
+        }
+        else {
+            // --- [新增代码：处理打败 Boss 时的结算] ---
+            if (game_.getCurrentMode() == GameMode::BOSS_RAID) {
+                if (curScore > bossHighScore_) {
+                    bossHighScore_ = curScore;
+                    saveChallengeScore((int)GameMode::BOSS_RAID, curScore);
+                    if (bossHighScoreTex_.id) { glDeleteTextures(1, &bossHighScoreTex_.id); bossHighScoreTex_.id = 0; }
+                }
+                stars = 3; // 击败 Boss 直接给满星
+                jmethodID method = env->GetMethodID(clazz, "showChallengeClearDialog", "(II)V");
+                if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)curScore);
             }
-            // 使用分數來計算普通關卡星星
-            stars = game_.getChallengeStars(game_.getCurrentMode());
+                // --- [新增结束] ---
+            else {
+                // 其他普通模式：读取分数，越高越好
+                if (curScore > savedMax) {
+                    game_.setMaxScore(game_.getCurrentMode(), curScore);
+                    saveChallengeScore((int)game_.getCurrentMode(), curScore);
+                }
+                // 使用分数来计算普通关卡星星
+                stars = game_.getChallengeStars(game_.getCurrentMode());
 
-            jmethodID method = env->GetMethodID(clazz, "showChallengeClearDialog", "(II)V");
-            if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)curScore);
+                jmethodID method = env->GetMethodID(clazz, "showChallengeClearDialog", "(II)V");
+                if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)curScore);
+            }
         }
 
         if (env->ExceptionCheck()) env->ExceptionClear();
@@ -1374,6 +1402,10 @@ void Renderer::render() {
         }
         drawButton(0, -10.0f, 20.0f, 8.0f, 0.0f, 1.0f, 0.7f, true, "start");
     }
+    else if (renderState == GameState::BOSS_HOW_TO_PLAY) {
+        shader_->setProjectionMatrix(uiProjMatrix);
+        drawBossHowToPlay();
+    }
     else if (renderState == GameState::MODE_SELECTION) {
         shader_->setProjectionMatrix(uiProjMatrix);
         if (currentState != GameState::STORE && currentState != GameState::SKIN_INVENTORY) {
@@ -1382,7 +1414,8 @@ void Renderer::render() {
             }
             drawButton(-32.0f, -8.0f, 18.0f, 18.0f, 0.1f, 0.6f, 1.0f, true, "endless");
             drawButton(0, -8.0f, 18.0f, 18.0f, 0.7f, 0.2f, 1.0f, false, "challenge");
-            drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.2f, 0.9f, 0.4f, false, "more");
+            // 修改最后一个按钮的 RGB 颜色：比如改为深紫色 (0.5f, 0.0f, 0.8f)
+            drawButton(32.0f, -8.0f, 18.0f, 18.0f, 0.5f, 0.0f, 0.8f, false, "more");
 
             drawButton(32.0f, 12.0f, 16.0f, 5.0f, 0.9f, 0.6f, 0.1f, true, "store_btn");
             drawButton(32.0f, 5.0f, 16.0f, 5.0f, 0.2f, 0.8f, 0.5f, true, "inventory_btn");
@@ -1433,7 +1466,7 @@ void Renderer::render() {
             }
         }
     }
-    else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER|| renderState == GameState::CHALLENGE_CLEAR) {
+    else if (renderState == GameState::PLAYING || renderState == GameState::GAME_OVER|| renderState == GameState::CHALLENGE_CLEAR || renderState == GameState::BOSS_BATTLE) {
 
         // ========= 第一部分：繪製遊戲世界 =========
         shader_->setProjectionMatrix(worldProjMatrix); // 切換到世界視角
@@ -1482,6 +1515,13 @@ void Renderer::render() {
             else if (pu.type == PowerUpType::SHIELD) tex = shieldTextureId_;
             else if (pu.type == PowerUpType::MAGNET) tex = magnetTextureId_;
 
+            // --- [新增] 绘制等离子道具 ---
+            if (pu.type == PowerUpType::PLASMA) {
+                // 用 isLightning=true 画一个闪电标志的特效球 (利用现有着色器)
+                drawShape(pu.pos.x - camX, pu.pos.y - camY, 2.5f, 2.5f, 0.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, 0, false, true);
+                continue; // 画完直接进入下一个
+            }
+
             if (tex) {
                 drawShape(pu.pos.x - camX, pu.pos.y - camY, 2.0f, 2.0f, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, tex);
             } else {
@@ -1517,13 +1557,14 @@ void Renderer::render() {
                 }
             } else {
                 float fr = 1.0f, fg = 1.0f, fb = 1.0f;
+                // --- 修改点：将食物的颜色映射与光环对齐 ---
                 switch(food.colorType) {
-                    case 0: fr = 0.2f; fg = 0.5f; fb = 1.0f; break;
-                    case 1: fr = 1.0f; fg = 0.4f; fb = 0.8f; break;
-                    case 2: fr = 1.0f; fg = 0.2f; fb = 0.2f; break;
-                    case 3: fr = 0.2f; fg = 1.0f; fb = 0.2f; break;
-                    case 4: fr = 0.7f; fg = 0.2f; fb = 1.0f; break;
-                    case 5: fr = 1.0f; fg = 0.9f; fb = 0.2f; break;
+                    case 0: fr = 1.0f; fg = 0.0f; fb = 0.0f; break; // 红色 (对应索引0)
+                    case 1: fr = 0.0f; fg = 1.0f; fb = 0.0f; break; // 绿色 (对应索引1)
+                    case 2: fr = 0.0f; fg = 0.0f; fb = 1.0f; break; // 蓝色 (对应索引2)
+                    case 3: fr = 1.0f; fg = 1.0f; fb = 0.0f; break; // 黄色
+                    case 4: fr = 1.0f; fg = 0.0f; fb = 1.0f; break; // 紫色
+                    case 5: fr = 0.0f; fg = 1.0f; fb = 1.0f; break; // 青色
                 }
                 drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, fr, fg, fb, 1.0f, true);
             }
@@ -1614,10 +1655,24 @@ void Renderer::render() {
             }
         }
 
+
+
+        // --- 绘制 Boss 战内容 ---
+        if (game_.getState() == GameState::BOSS_BATTLE) {
+            drawBoss(camX, camY);           // 修改：传入坐标偏移
+            drawPlayerBuffAura(camX, camY); // 修改：传入坐标偏移
+
+        }
+
         // ========= 第二部分：繪製懸浮 UI =========
         shader_->setProjectionMatrix(uiProjMatrix); // 切換回絕對 UI 視角
 
-        if (currentState == GameState::PLAYING) {
+        // [新增]：在这里绘制血条，确保血条位置固定，不随摄像机移动
+        if (game_.getState() == GameState::BOSS_BATTLE) {
+            drawBossUI();
+        }
+
+        if (currentState == GameState::PLAYING || currentState == GameState::BOSS_BATTLE) {
             float joyX = -uiHalfWidth + 18.0f, joyY = -uiProjHalfHeight + 14.0f;
             joyPixelX_ = (joyX / uiHalfWidth + 1.0f) * 0.5f * (float)width_;
             joyPixelY_ = (1.0f - (joyY / uiProjHalfHeight + 1.0f) * 0.5f) * (float)height_;
@@ -2095,8 +2150,8 @@ void Renderer::handleInput() {
                     game_.setEndlessArenaMode(false);
                     clearRankPanelCache();
                     playSfx(2);
-                    game_.reset();
-                    game_.startGame();
+                    // 修改点：不再调用通用的 reset/startGame，而是启动你的 Boss 战初始化
+                    game_.startBossLevel();
                 } else if (abs(nx - 32.0f) < 8.0f && abs(ny - 12.0f) < 2.5f) {
                     previousState_ = game_.getState();
                     game_.setState(GameState::STORE);
@@ -2113,6 +2168,13 @@ void Renderer::handleInput() {
                     releaseHeadNameTexCache();
                     lastHeadLabelPlayerName_.clear();
                     playSfx(2);
+                }
+            }
+            else if (game_.getState() == GameState::BOSS_HOW_TO_PLAY) {
+                // 判定点击了屏幕中央的“已明白”按钮
+                if (abs(nx) < 8.0f && abs(ny + 11.0f) < 2.5f) {
+                    playSfx(2);
+                    game_.setState(GameState::BOSS_BATTLE); // 真正开始战斗
                 }
             }
             else if (game_.getState() == GameState::CHALLENGE_SELECTION) {
@@ -2148,7 +2210,7 @@ void Renderer::handleInput() {
                     }
                 }
             }
-            else if (game_.getState() == GameState::PLAYING) {
+            else if (game_.getState() == GameState::PLAYING || game_.getState() == GameState::BOSS_BATTLE) {
                 if (game_.isEndlessArenaMode() && hitEndlessRankPanel(nx, ny)) {
                     rankingPanelExpanded_ = !rankingPanelExpanded_;
                     playSfx(2);
@@ -2232,7 +2294,7 @@ void Renderer::handleInput() {
                 }
 
                 if (pointer.id == joystickPointerId_ &&
-                    game_.getState() == GameState::PLAYING) {
+                        (game_.getState() == GameState::PLAYING || game_.getState() == GameState::BOSS_BATTLE)) {
                     float dx = px - joyPixelX_, dy_joy = py - joyPixelY_;
                     float dist = std::sqrt(dx * dx + dy_joy * dy_joy);
                     if (dist > 5.0f) {
@@ -2345,21 +2407,33 @@ void Renderer::triggerGameOver() {
     int score = game_.getScore();
 
     if (!game_.isEndlessArenaMode()) {
-        int savedMax = game_.getMaxScore(game_.getCurrentMode());
-        if (score > savedMax) {
-            game_.setMaxScore(game_.getCurrentMode(), score);
-            jmethodID saveMethod = env->GetMethodID(clazz, "saveChallengeScore", "(II)V");
-            if (saveMethod) env->CallVoidMethod(activityObj, saveMethod, (jint)game_.getCurrentMode(), (jint)score);
-        }
-
-        if (game_.isTimeOut()) {
-            int stars = game_.calculateStars(game_.getCurrentMode(), score);
-            jmethodID method = env->GetMethodID(clazz, "showTimeOutDialog", "(II)V");
-            if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)score);
-        } else {
-            int stars = game_.calculateStars(game_.getCurrentMode(), score);
+        // --- [新增代码：处理 Boss 战死亡时的分数保存] ---
+        if (game_.getCurrentMode() == GameMode::BOSS_RAID) {
+            // 弹出挑战失败结算框
+            int stars = 0;
             jmethodID method = env->GetMethodID(clazz, "showChallengeFailDialog", "(II)V");
-            if (method) env->CallVoidMethod(activityObj, method, (jint) stars, (jint) score);
+            if (method) env->CallVoidMethod(activityObj, method, (jint)stars, (jint)score);
+        }
+            // --- [新增结束] ---
+        else {
+            int savedMax = game_.getMaxScore(game_.getCurrentMode());
+            if (score > savedMax) {
+                game_.setMaxScore(game_.getCurrentMode(), score);
+                jmethodID saveMethod = env->GetMethodID(clazz, "saveChallengeScore", "(II)V");
+                if (saveMethod)
+                    env->CallVoidMethod(activityObj, saveMethod, (jint) game_.getCurrentMode(),
+                                        (jint) score);
+            }
+
+            if (game_.isTimeOut()) {
+                int stars = game_.calculateStars(game_.getCurrentMode(), score);
+                jmethodID method = env->GetMethodID(clazz, "showTimeOutDialog", "(II)V");
+                if (method) env->CallVoidMethod(activityObj, method, (jint) stars, (jint) score);
+            } else {
+                int stars = game_.calculateStars(game_.getCurrentMode(), score);
+                jmethodID method = env->GetMethodID(clazz, "showChallengeFailDialog", "(II)V");
+                if (method) env->CallVoidMethod(activityObj, method, (jint) stars, (jint) score);
+            }
         }
     }
     else {
@@ -2395,7 +2469,15 @@ void Renderer::restartGame() {
     else if (game_.getCurrentMode() == GameMode::CHALLENGE_7) game_.startChallengeLevel7();
     else if (game_.getCurrentMode() == GameMode::CHALLENGE_8) game_.startChallengeLevel8();
     else if (game_.getCurrentMode() == GameMode::CHALLENGE_9) game_.startChallengeLevel9();
-    else if (game_.getCurrentMode() == GameMode::CHALLENGE_10) game_.startChallengeLevel10(); else {
+    else if (game_.getCurrentMode() == GameMode::CHALLENGE_10) {
+        game_.startChallengeLevel10();
+    }
+        // --- [核心修改点]：在此处加入对 Boss 模式的判断 ---
+    else if (game_.getCurrentMode() == GameMode::BOSS_RAID) {
+        game_.startBossLevel(); // 重新调用你写的 Boss 战初始化逻辑
+    }
+        // --- [修改结束] ---
+    else {
         game_.setEndlessArenaMode(endlessArenaActive_);
         game_.reset();
         game_.startGame();
@@ -2463,3 +2545,149 @@ void Renderer::createModels() {
     models_.emplace_back(vertices, indices, nullptr);
 }
 
+void Renderer::drawBoss(float camX, float camY) {
+    const auto& boss = game_.getBoss();
+    // 在循环开始前更新闪烁逻辑（或者在 update 里更新，这里简单处理）
+    bool isHitFlashing = (boss.hitFlashTimer > 0.0f);
+    if (!boss.active) return;
+
+    for (const auto& seg : boss.segments) {
+        float r = 0.2f, g = 0.2f, b = 0.2f; // 默认装甲颜色：深灰色
+        bool isGlow = false;
+
+        // 根据段位类型设置颜色和光效
+        if (seg.type == BossSegmentType::HEAD) {
+            r = 0.1f; g = 0.1f; b = 0.1f; // 头部：纯黑
+        } else if (seg.type == BossSegmentType::CORE) {
+            isGlow = true;
+            // 核心颜色匹配：确保这里和食物/光环一致
+            if (seg.colorType == 0) { r = 1.0f; g = 0.0f; b = 0.0f; }      // 红色
+            else if (seg.colorType == 1) { r = 0.0f; g = 1.0f; b = 0.0f; } // 绿色
+            else if (seg.colorType == 2) { r = 0.0f; g = 0.0f; b = 1.0f; } // 蓝色
+        }
+
+        // 绘制段位圆柱/圆形
+        float size = (seg.type == BossSegmentType::HEAD) ? 2.5f : 1.8f;
+
+        // 在绘制核心段之前加入
+        if (seg.type == BossSegmentType::CORE) {
+            float pulse = 1.0f + 0.1f * std::sin(std::chrono::steady_clock::now().time_since_epoch().count() * 0.00000001f);
+            size *= pulse;
+        }
+
+        // 核心段增加一层外发光（Vibe 核心）
+        if (isGlow) {
+            drawShape(seg.pos.x - camX, seg.pos.y - camY, size * 1.5f, size * 1.5f, r, g, b, 0.3f, true);
+        }
+
+        // 如果正在闪烁，强制将颜色变为白色 (Vibe: 硬核打击感)
+        if (isHitFlashing) {
+            r = 1.0f; g = 1.0f; b = 1.0f;
+        }
+
+        drawShape(seg.pos.x - camX, seg.pos.y - camY, size, size, r, g, b, 1.0f, true);
+    }
+}
+
+void Renderer::drawBossUI() {
+    const auto& boss = game_.getBoss();
+    if (!boss.active) return;
+
+    // 绘制血条背景（黑色边框）
+    drawShape(0.0f, 18.0f, 20.0f, 0.8f, 0.0f, 0.0f, 0.0f, 0.5f);
+
+    // 计算血条比例
+    float hpRate = boss.totalHP / boss.maxHP;
+    // 绘制红色进度条（根据阶段改变颜色）
+    float r = 1.0f, g = 0.0f, b = 0.0f;
+    if (boss.phase == 3) { g = 0.5f; } // 狂暴阶段变为橙红色
+
+    drawShape(-10.0f + 10.0f * hpRate, 18.0f, 20.0f * hpRate, 0.6f, r, g, b, 0.8f);
+
+    // --- [新增代码：绘制 Boss 模式积分与最高分] ---
+    int curScore = game_.getScore();
+
+    // 动态更新当前得分的文字贴图
+    if (curScore != lastBossScore_ || bossScoreTex_.id == 0) {
+        lastBossScore_ = curScore;
+        if (bossScoreTex_.id) glDeleteTextures(1, &bossScoreTex_.id);
+        bossScoreTex_ = createTextTextureColoredLeft(u8"当前得分: " + std::to_string(curScore), 50, 0xFFFFFFFF);
+    }
+
+    // 初始化最高分的文字贴图
+    if (bossHighScoreTex_.id == 0) {
+        bossHighScoreTex_ = createTextTextureColoredLeft(u8"历史最高: " + std::to_string(bossHighScore_), 50, 0xFFFFCC00);
+    }
+
+    float aspect = (float)width_ / height_;
+    float uiHalfWidth = kProjectionHalfHeight * aspect;
+
+    // 在屏幕左上方绘制当前得分 (白色)
+    if (bossScoreTex_.id) {
+        float tw = std::min(10.0f, bossScoreTex_.width);
+        float th = tw * (bossScoreTex_.height / std::max(bossScoreTex_.width, 0.01f));
+        drawShape(-uiHalfWidth + 1.0f + tw/2.0f, 20.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, bossScoreTex_.id);
+    }
+    // 在屏幕右上方绘制历史最高分 (金色)
+    if (bossHighScoreTex_.id) {
+        float tw = std::min(10.0f, bossHighScoreTex_.width);
+        float th = tw * (bossHighScoreTex_.height / std::max(bossHighScoreTex_.width, 0.01f));
+        drawShape(uiHalfWidth - 1.0f - tw/2.0f, 20.5f, tw, th, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, bossHighScoreTex_.id);
+    }
+    // --- [新增结束] ---
+}
+
+void Renderer::drawPlayerBuffAura(float camX, float camY) {
+    int colorIdx = game_.getPlayerBuffColor();
+    if (colorIdx == -1) return;
+
+    const auto& snake = game_.getSnake();
+    if (snake.empty()) return;
+
+    // --- [新增] 最高优先级视觉：等离子斩击状态 ---
+    if (game_.getPlasmaTimer() > 0.0f) {
+        // 画一个极大且耀眼的青白色斩击光环
+        drawShape(snake[0].x - camX, snake[0].y - camY, 3.8f, 3.8f, 0.8f, 1.0f, 1.0f, 0.9f, true);
+        return; // 在斩击状态下，不显示普通颜色 Buff
+    }
+
+    // 在玩家头部绘制一个半透明的颜色环，提示当前拥有的攻击属性
+    // --- 修改点：统一光环的颜色映射 ---
+    float r = 0, g = 0, b = 0;
+    if (colorIdx == 0) { r = 1.0f; g = 0.0f; b = 0.0f; }      // 0 为红色
+    else if (colorIdx == 1) { r = 0.0f; g = 1.0f; b = 0.0f; } // 1 为绿色
+    else if (colorIdx == 2) { r = 0.0f; g = 0.0f; b = 1.0f; } // 2 为蓝色
+        // 增加对其他索引的处理，防止吃错颜色后光环消失
+    else { r = 0.5f; g = 0.5f; b = 0.5f; }
+
+    drawShape(snake[0].x - camX, snake[0].y - camY, 2.0f, 2.0f, r, g, b, 0.4f, true);
+}
+
+void Renderer::drawBossHowToPlay() {
+    float aspect = (float)width_ / height_;
+    float uiHalfWidth = kProjectionHalfHeight * aspect;
+
+    // 1. 背景遮罩 (深蓝色半透明)
+    drawShape(0, 0, uiHalfWidth * 2.0f, kProjectionHalfHeight * 2.0f, 0.05f, 0.05f, 0.1f, 0.85f);
+
+    // 2. 装饰边框 (做成可爱的圆角矩形效果)
+    drawShape(0, 0, 32.0f, 36.0f, 0.2f, 0.6f, 1.0f, 0.2f, false, 0.2f); // 外发光
+    drawShape(0, 0, 30.0f, 34.0f, 0.1f, 0.12f, 0.18f, 0.98f, false, 0.1f); // 主体
+
+    // 3. 绘制文字 (逐行排列)
+    float startY = 15.0f; // 略微上提到 15.0
+    float gap = 3.8f;     // 行间距微调为 3.8
+
+    // 标题 (金色)
+    drawShape(0, startY, textTextures_["boss_rule_title"].width, textTextures_["boss_rule_title"].height, 1.0f, 0.8f, 0.2f, 1.0f, false, 0.0f, textTextures_["boss_rule_title"].id);
+
+    // 规则 1-6 (白色)
+    drawShape(0, startY - gap, textTextures_["boss_rule_1"].width, textTextures_["boss_rule_1"].height, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["boss_rule_1"].id);
+    drawShape(0, startY - gap*2, textTextures_["boss_rule_2"].width, textTextures_["boss_rule_2"].height, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["boss_rule_2"].id);
+    drawShape(0, startY - gap*3, textTextures_["boss_rule_3"].width, textTextures_["boss_rule_3"].height, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["boss_rule_3"].id);
+    drawShape(0, startY - gap*4, textTextures_["boss_rule_4"].width, textTextures_["boss_rule_4"].height, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["boss_rule_4"].id);
+    drawShape(0, startY - gap*5, textTextures_["boss_rule_5"].width, textTextures_["boss_rule_5"].height, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["boss_rule_5"].id);
+    drawShape(0, startY - gap*6, textTextures_["boss_rule_6"].width, textTextures_["boss_rule_6"].height, 1.0f, 1.0f, 1.0f, 1.0f, false, 0.0f, textTextures_["boss_rule_6"].id);
+    // 4. "已明白" 按钮 (绿色)
+    drawButton(0, -12.5f, 16.0f, 4.5f, 0.2f, 0.8f, 0.4f, true, "boss_btn_ok");
+}
