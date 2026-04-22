@@ -18,7 +18,8 @@ enum class GameState {
     GAME_OVER,
     CHALLENGE_CLEAR,
     CHALLENGE_SELECTION,
-
+    BOSS_BATTLE,         // 新增：进入 Boss 战状态
+    BOSS_HOW_TO_PLAY  // [新增]：Boss 战前的引导状态
 };
 enum class GameMode {
     ENDLESS,      // 无尽模式
@@ -31,7 +32,8 @@ enum class GameMode {
     CHALLENGE_7,
     CHALLENGE_8,
     CHALLENGE_9,
-    CHALLENGE_10
+    CHALLENGE_10,
+    BOSS_RAID           // 新增：虚空猎杀模式
 };
 struct Vector2f {
     float x;
@@ -53,7 +55,8 @@ struct Food {
 enum class PowerUpType {
     SPEED,
     SHIELD,
-    MAGNET
+    MAGNET,
+    PLASMA
 };
 
 struct PowerUp {
@@ -69,6 +72,37 @@ struct AISnake {
     float pendingGrowth = 0.0f;
     float wanderTimer = 0.0f;
     std::string displayName;
+};
+
+// Boss 身体段类型
+enum class BossSegmentType {
+    HEAD,
+    CORE,   // 弱点：核心段
+    ARMOR,  // 强力防御：装甲段
+    TAIL
+};
+
+// Boss 单个身体段的数据
+struct BossSegment {
+    Vector2f pos;
+    BossSegmentType type;
+    float currentHP;
+    int colorType;  // 核心段颜色（0:红, 1:绿, 2:蓝），用于颜色匹配机制
+};
+
+// Boss 实体封装
+struct BossEntity {
+    std::vector<BossSegment> segments;
+    float rotation = 0.0f;
+    float totalHP = 500.0f;
+    float maxHP = 500.0f;
+    float skillTimer = 0.0f;
+    int phase = 1;      // 战斗阶段：1, 2, 3
+    // --- [新增] ---
+    int hitCount = 0;        // 记录受击次数
+    float speedBoost = 0.0f; // 断尾后的狂暴加速补偿
+    bool active = false;
+    float hitFlashTimer = 0.0f; // 新增：受伤闪烁计时器
 };
 
 struct RankEntry {
@@ -101,7 +135,7 @@ public:
     // --- 核心修改：让挑战模式有倒计时，但排除第七关(迷宫模式) ---
     // --- 核心修改：将第九关也排除在倒计时之外 ---
     bool hasTimeLimit()
-    const { return currentMode_ >= GameMode::CHALLENGE_1 && currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_8 && currentMode_ != GameMode::CHALLENGE_9; }
+    const { return currentMode_ >= GameMode::CHALLENGE_1 && currentMode_ != GameMode::CHALLENGE_7 && currentMode_ != GameMode::CHALLENGE_8 && currentMode_ != GameMode::CHALLENGE_9 && currentMode_ != GameMode::BOSS_RAID; }
     float getTimeRemaining() const { return timeRemaining_; }
     bool isTimeOut() const { return isTimeOut_; }
     void update(float deltaTime);
@@ -163,6 +197,14 @@ public:
     GameMode getCurrentMode() const { return currentMode_; }
     float getMazeTimeElapsed() const { return mazeTimeElapsed_; }
     Vector2f getMazeExit() const { return mazeExit_; }
+
+    void startBossLevel(); // 启动第三种模式
+
+    // 获取 Boss 数据供渲染器使用
+    const BossEntity& getBoss() const { return boss_; }
+    int getPlayerBuffColor() const { return playerBuffColor_; }
+
+    float getPlasmaTimer() const { return plasmaTimer_; }
 private:
     void spawnFood();
     void spawnPowerUp();
@@ -214,6 +256,7 @@ private:
     float speedTimer_;
     float shieldTimer_;
     float magnetTimer_;
+    float plasmaTimer_ = 0.0f; // 等离子斩击状态计时器
     int maxScoreCh4_ = 0;
     int maxScoreCh5_ = 0;
     int maxScoreCh6_ = 0;
@@ -232,6 +275,16 @@ private:
     GameMode currentMode_ = GameMode::ENDLESS; // 当前游戏模式
     int challengeTargetScore_ = 500;        // 过关目标分数
     float wallRadius_ = 1.0f;               // 墙壁的碰撞判定大小
+
+    // Boss 相关
+    BossEntity boss_;
+    int playerBuffColor_ = -1; // 玩家当前的颜色 Buff（-1 表示无）
+    float buffTimer_ = 0.0f;   // Buff 持续时间
+
+    // 内部处理逻辑
+    void updateBoss(float deltaTime);
+    void checkPlayerVsBoss();
+
 };
 
 #endif // NEON_SNAKE_GAME_H
