@@ -1692,8 +1692,6 @@ void Renderer::render() {
                 };
 
 
-
-
                 // 设置左上角的起始坐标与行间距
                 float startX = -uiHalfWidth + 1.0f;
                 float startY = uiProjHalfHeight - 2.5f;
