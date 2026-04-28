@@ -417,8 +417,11 @@ void SnakeGame::update(float deltaTime) {
 
             // 【新增内容】：如果是在 Boss 战模式，吃食物会获得颜色 Buff
             if (currentMode_ == GameMode::BOSS_RAID) {
-                playerBuffColor_ = it->colorType; // 记录食物颜色
-                buffTimer_ = 10.0f;              // Buff 持续 10 秒
+                // 只有吃 红色(0) 或 绿色(1)，且 必须是自然生成的食物(非掉落物)，才给光环
+                if ((it->colorType == 0 || it->colorType == 1) && !it->isDropped) {
+                    playerBuffColor_ = it->colorType;
+                    buffTimer_ = 10.0f;
+                }
             }
 
 
@@ -1699,7 +1702,7 @@ void SnakeGame::updateBoss(float deltaTime) {
 
     // --- 3. 身体跟随逻辑 (IK) ---
     // Boss 的段距比小蛇大 (Vibe: 关节感)
-    float bossSegmentDist = 2.5f;
+    float bossSegmentDist = 3.5f;
     for (size_t i = 1; i < boss_.segments.size(); ++i) {
         Vector2f& cur = boss_.segments[i].pos;
         Vector2f& prev = boss_.segments[i-1].pos;
@@ -1732,7 +1735,7 @@ void SnakeGame::checkPlayerVsBoss() {
         float dy = pHead.y - seg.pos.y;
         float dist = std::sqrt(dx*dx + dy*dy);
 
-        float bossRad = (seg.type == BossSegmentType::HEAD) ? 2.5f : 1.8f;
+        float bossRad = (seg.type == BossSegmentType::HEAD) ? 3.5f : 2.6f;
 
         if (dist < (pRad + bossRad)) {
             if (seg.type == BossSegmentType::CORE) {

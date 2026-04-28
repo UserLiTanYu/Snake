@@ -1541,9 +1541,28 @@ void Renderer::render() {
             }
 
             if (food.isDropped) {
-                // ... (略过掉落食物的渲染)
+                // 恢复被删掉的掉落食物渲染逻辑
+                int skinId = food.colorType;
+                if (skinId <= 7) {
+                    float r = 1.f, g = 1.f, b = 1.f;
+                    switch(skinId) {
+                        case 0: r=0.0f; g=1.0f; b=1.0f; break;
+                        case 1: r=1.0f; g=0.2f; b=0.2f; break;
+                        case 2: r=0.2f; g=1.0f; b=0.2f; break;
+                        case 3: r=1.0f; g=0.9f; b=0.2f; break;
+                        case 4: r=0.7f; g=0.2f; b=1.0f; break;
+                        case 5: r=1.0f; g=0.4f; b=0.8f; break;
+                        case 6: r=1.0f; g=0.6f; b=0.0f; break;
+                        case 7: r=0.6f; g=0.4f; b=0.2f; break;
+                    }
+                    drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, r, g, b, 1.0f, true);
+                } else {
+                    GLuint tex = skinTex_[skinId];
+                    drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, 1.0f, 1.0f, 1.0f, 1.0f, true, 0.0f, tex);
+                }
             } else {
                 float fr = 1.0f, fg = 1.0f, fb = 1.0f;
+                // ... 后面的保持不变 ...
                 // --- 修改点：将食物的颜色映射与光环对齐 ---
                 switch(food.colorType) {
                     case 0: fr = 1.0f; fg = 0.0f; fb = 0.0f; break; // 红色 (对应索引0)
@@ -2554,7 +2573,7 @@ void Renderer::drawBoss(float camX, float camY) {
         }
 
         // 绘制段位圆柱/圆形
-        float size = (seg.type == BossSegmentType::HEAD) ? 2.5f : 1.8f;
+        float size = (seg.type == BossSegmentType::HEAD) ? 3.5f : 2.6f;
 
         // 在绘制核心段之前加入
         if (seg.type == BossSegmentType::CORE) {
