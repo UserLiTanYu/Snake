@@ -1536,25 +1536,12 @@ void Renderer::render() {
             }
             float foodSize = 0.8f * foodScale;
 
+            if (game_.getCurrentMode() == GameMode::BOSS_RAID && !food.isDropped) {
+                foodSize = 1.6f;
+            }
+
             if (food.isDropped) {
-                int skinId = food.colorType;
-                if (skinId <= 7) {
-                    float r = 1.f, g = 1.f, b = 1.f;
-                    switch(skinId) {
-                        case 0: r=0.0f; g=1.0f; b=1.0f; break;
-                        case 1: r=1.0f; g=0.2f; b=0.2f; break;
-                        case 2: r=0.2f; g=1.0f; b=0.2f; break;
-                        case 3: r=1.0f; g=0.9f; b=0.2f; break;
-                        case 4: r=0.7f; g=0.2f; b=1.0f; break;
-                        case 5: r=1.0f; g=0.4f; b=0.8f; break;
-                        case 6: r=1.0f; g=0.6f; b=0.0f; break;
-                        case 7: r=0.6f; g=0.4f; b=0.2f; break;
-                    }
-                    drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, r, g, b, 1.0f, true);
-                } else {
-                    GLuint tex = skinTex_[skinId];
-                    drawShape(food.pos.x - camX, food.pos.y - camY, foodSize, foodSize, 1.0f, 1.0f, 1.0f, 1.0f, true, 0.0f, tex);
-                }
+                // ... (略过掉落食物的渲染)
             } else {
                 float fr = 1.0f, fg = 1.0f, fb = 1.0f;
                 // --- 修改点：将食物的颜色映射与光环对齐 ---
@@ -2660,7 +2647,13 @@ void Renderer::drawPlayerBuffAura(float camX, float camY) {
         // 增加对其他索引的处理，防止吃错颜色后光环消失
     else { r = 0.5f; g = 0.5f; b = 0.5f; }
 
-    drawShape(snake[0].x - camX, snake[0].y - camY, 2.0f, 2.0f, r, g, b, 0.4f, true);
+    // --- [核心修改：将原本的 2.0f 调大为 4.5f，并加上双层呼吸动画] ---
+    float pulse = 1.0f + 0.12f * std::sin(std::chrono::steady_clock::now().time_since_epoch().count() * 0.000000015f);
+    float auraSize = 4.5f * pulse; // 放大光环
+
+    // 画两层光环：外层大而淡，内层小而亮，形成很明显的能量场 Vibe
+    drawShape(snake[0].x - camX, snake[0].y - camY, auraSize, auraSize, r, g, b, 0.25f, true);
+    drawShape(snake[0].x - camX, snake[0].y - camY, auraSize * 0.7f, auraSize * 0.7f, r, g, b, 0.55f, true);
 }
 
 void Renderer::drawBossHowToPlay() {
