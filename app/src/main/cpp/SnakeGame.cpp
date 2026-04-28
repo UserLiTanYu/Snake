@@ -1682,6 +1682,11 @@ void SnakeGame::updateBoss(float deltaTime) {
                 snake_[0].x += (dx / dist) * pushPower;
                 snake_[0].y += (dy / dist) * pushPower;
 
+                // --- [修复Bug2：给玩家增加被震退的无敌帧] ---
+                // 给予 0.8 秒的无敌时间，保证玩家被推飞过程中绝不会撞死在 Boss 身上
+                shieldTimer_ = 0.8f;
+                // --- [修复结束] ---
+
                 // 重置技能计时器
                 boss_.skillTimer = 0.0f;
                 // 可以在这里触发一个屏幕震动的标记（后续由 Renderer 处理）
@@ -1693,7 +1698,7 @@ void SnakeGame::updateBoss(float deltaTime) {
     boss_.rotation = lerpAngle(boss_.rotation, desiredRotation, turnSpeed * deltaTime);
 
     // --- 2. 移动 Boss 头部 ---
-    moveSpeed = (boss_.phase == 3) ? 18.0f : 12.0f;
+    moveSpeed = (boss_.phase == 3) ? 25.0f : 12.0f;
     // --- [核心修改点 3：加上被斩击后的永久加速补偿] ---
     moveSpeed += boss_.speedBoost;
     // --- [修改结束] ---
@@ -1748,13 +1753,27 @@ void SnakeGame::checkPlayerVsBoss() {
                     pendingGrowth_ += 2.0f;
 
                     // --- [新增机制：打2下掉落等离子斩击道具] ---
+                    // --- [修复Bug1：防堆叠机制] ---
                     boss_.hitCount++;
                     if (boss_.hitCount >= 2) {
                         boss_.hitCount = 0; // 重置计数
-                        // 在 Boss 尾巴的位置掉落等离子炸弹
-                        Vector2f tailPos = boss_.segments.back().pos;
-                        powerUps_.push_back({tailPos, PowerUpType::PLASMA});
+
+                        // 检查场上是否已有闪电道具，或者玩家正在处于斩击状态
+                        bool hasPlasma = (plasmaTimer_ > 0.0f);
+                        for (const auto& pu : powerUps_) {
+                            if (pu.type == PowerUpType::PLASMA) {
+                                hasPlasma = true;
+                                break;
+                            }
+                        }
+
+                        // 只有场上干干净净时，才掉落唯一的等离子炸弹
+                        if (!hasPlasma) {
+                            Vector2f tailPos = boss_.segments.back().pos;
+                            powerUps_.push_back({tailPos, PowerUpType::PLASMA});
+                        }
                     }
+                    // --- [修复结束] ---
 
                     // 1. 给予 0.5 秒的无敌时间，防止连续碰撞
                     shieldTimer_ = 0.5f;
@@ -1781,7 +1800,19 @@ void SnakeGame::checkPlayerVsBoss() {
                         if (boss_.segments[j].type == BossSegmentType::CORE) {
                             coreDestroyed = true;
                         }
-                        foods_.push_back({boss_.segments[j].pos, true, 0, 8});
+                        // --- [修复 Bug：生成一定能显示的彩色食物，并增加爆浆散开特效] ---
+                        Vector2f dropPos = boss_.segments[j].pos;
+
+                        // 随机红(0)、绿(1)、蓝(2)色
+                        int randColor = rand() % 3;
+
+                        // 让掉落的食物稍微散开一点，不要完全叠在一条直线上 (视觉效果更好)
+                        dropPos.x += (rand() % 200 / 100.0f - 1.0f) * 1.5f;
+                        dropPos.y += (rand() % 200 / 100.0f - 1.0f) * 1.5f;
+
+                        // 设置为普通食物 (false)，赋予颜色，分值设为 5
+                        foods_.push_back({dropPos, false, randColor, 5});
+                        // --- [修复结束] ---
                     }
 
                     // 2. 截断身体
