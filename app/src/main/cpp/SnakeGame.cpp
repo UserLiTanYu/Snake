@@ -1653,9 +1653,17 @@ void SnakeGame::updateBoss(float deltaTime) {
     // 在 updateBoss 函数内部的阶段处理部分修改/添加：
     if (boss_.phase == 3) {
         moveSpeed = 18.0f; // 狂暴速度
+
+        // --- [修复 Bug：补充 Phase 3 的追踪和转向逻辑] ---
+        // 狂暴状态下，放弃走位，直接死死盯住玩家的头！
+        desiredRotation = std::atan2(playerHead.y - bossHead.y, playerHead.x - bossHead.x);
+        turnSpeed = 4.0f; // 转向速度拉满 (之前阶段1是1.5，阶段2是2.5)
+        // --- [修复结束] ---
+
+
         boss_.skillTimer += deltaTime;
 
-        if (boss_.skillTimer > 4.0f) { // 每 4 秒释放一次冲击波
+        if (boss_.skillTimer > 3.0f) { // 每 3 秒释放一次冲击波
             Vector2f playerHead = snake_.front();
             Vector2f bossHead = boss_.segments[0].pos;
 
@@ -1776,14 +1784,7 @@ void SnakeGame::checkPlayerVsBoss() {
                     // 2. 截断身体
                     boss_.segments.erase(boss_.segments.begin() + i, boss_.segments.end());
 
-                    // --- [修复 Bug：把截断转化为真实伤害！] ---
-                    // 每切掉一节装甲扣 10 点血
-                    boss_.totalHP -= severedCount * 10.0f;
 
-                    // 如果这一刀顺带把核心也给切碎了，直接追加 200 点真实伤害！
-                    if (coreDestroyed) {
-                        boss_.totalHP -= 200.0f;
-                    }
 
                     // 防软卡死保险：检查剩余的身体里还有没有核心
                     bool hasCore = false;
